@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Focus — ChronoFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/grain.css">
+  <link rel="stylesheet" href="css/starfield.css">
+  <link rel="stylesheet" href="css/shell.css">
+  <link rel="stylesheet" href="css/focus.css">
+</head>
+<body class="focus-body">
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <div class="page-bg">
+    <canvas id="bgCanvas" class="page-bg-canvas"></canvas>
+    <div class="grain"></div>
+  </div>
+
+  <nav class="nav-shell" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <div class="nav-logo"><svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <span class="nav-brand-text">ChronoFlow</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="planner.html" class="nav-link">Planner</a>
+        <a href="focus.html" class="nav-link active">Focus</a>
+        <a href="stats.html" class="nav-link">Stats</a>
+        <a href="settings.html" class="nav-link">Settings</a>
+      </div>
+      <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme"></button>
+    </div>
+  </nav>
+
+  <main id="main" class="focus-shell">
+    <div class="focus-card">
+      <div class="focus-task-selector">
+        <label class="focus-label">Current Task</label>
+        <select id="focusTaskSelect" class="focus-select">
+          <option value="">— Select a task —</option>
+        </select>
+      </div>
+
+      <div class="focus-timer-display" id="focusTimerDisplay">25:00</div>
+
+      <div class="focus-progress-wrap">
+        <div class="progress-track">
+          <div class="progress-fill" id="focusProgressFill" style="width:100%"></div>
+        </div>
+      </div>
+
+      <div class="focus-mode-row">
+        <button class="btn btn-sm btn-ghost focus-mode-btn active" data-mode="25">Pomodoro 25m</button>
+        <button class="btn btn-sm btn-ghost focus-mode-btn" data-mode="50">Deep 50m</button>
+        <button class="btn btn-sm btn-ghost focus-mode-btn" data-mode="5">Break 5m</button>
+        <button class="btn btn-sm btn-ghost focus-mode-btn" data-mode="custom">Custom</button>
+      </div>
+
+      <div class="focus-controls">
+        <button class="btn btn-primary" id="focusStartBtn">Start</button>
+        <button class="btn btn-secondary" id="focusPauseBtn" disabled>Pause</button>
+        <button class="btn btn-ghost" id="focusResetBtn">Reset</button>
+      </div>
+
+      <div class="focus-wake-row">
+        <button class="btn btn-sm btn-ghost" id="wakeLockBtn">Keep Screen On</button>
+        <span class="focus-wake-status" id="wakeLockStatus"></span>
+      </div>
+    </div>
+  </main>
+
+  <!-- Post-session modal -->
+  <div class="modal-overlay" id="postSessionOverlay" role="dialog" aria-modal="true">
+    <div class="modal">
+      <div class="modal-header">
+        <span class="panel-title">Session Complete 🎉</span>
+      </div>
+      <div class="modal-body">
+        <p id="postSessionMsg">Great work! How did it go?</p>
+        <div class="form-group" style="margin-top:16px">
+          <label>Mark task as…</label>
+          <div style="display:flex;gap:8px;margin-top:8px">
+            <button class="btn btn-primary" data-post="done">Done</button>
+            <button class="btn btn-secondary" data-post="progress">Still in progress</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-container" aria-live="polite"></div>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/backgrounds.js"></script>
+  <script src="js/starfield.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/focus.js"></script>
+</body>
+</html>

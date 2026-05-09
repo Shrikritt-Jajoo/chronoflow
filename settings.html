@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Settings — ChronoFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/grain.css">
+  <link rel="stylesheet" href="css/starfield.css">
+  <link rel="stylesheet" href="css/shell.css">
+  <link rel="stylesheet" href="css/settings.css">
+</head>
+<body class="settings-body">
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <div class="page-bg">
+    <canvas id="bgCanvas" class="page-bg-canvas"></canvas>
+    <div class="grain"></div>
+  </div>
+
+  <nav class="nav-shell" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <div class="nav-logo"><svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <span class="nav-brand-text">ChronoFlow</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="planner.html" class="nav-link">Planner</a>
+        <a href="focus.html" class="nav-link">Focus</a>
+        <a href="stats.html" class="nav-link">Stats</a>
+        <a href="settings.html" class="nav-link active">Settings</a>
+      </div>
+      <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme"></button>
+    </div>
+  </nav>
+
+  <main id="main" class="settings-shell">
+    <header class="page-header">
+      <h1 class="page-title">Settings</h1>
+      <p class="page-subtitle">Customise ChronoFlow to your workflow</p>
+    </header>
+
+    <div class="settings-grid">
+      <nav class="settings-nav" aria-label="Settings sections">
+        <button class="settings-nav-item active" data-section="appearance">Appearance</button>
+        <button class="settings-nav-item" data-section="planning">Planning Rules</button>
+        <button class="settings-nav-item" data-section="ai">AI</button>
+        <button class="settings-nav-item" data-section="gmail">Gmail</button>
+        <button class="settings-nav-item" data-section="data">Data</button>
+      </nav>
+
+      <div class="settings-content">
+        <section class="settings-section" id="appearanceSection">
+          <div class="settings-section-header">
+            <h2 class="panel-title">Appearance</h2>
+          </div>
+          <div class="settings-section-body" id="appearanceSettings"></div>
+        </section>
+
+        <section class="settings-section hidden" id="planningSection">
+          <div class="settings-section-header">
+            <h2 class="panel-title">Planning Rules</h2>
+          </div>
+          <div class="settings-section-body" id="planningSettings"></div>
+        </section>
+
+        <section class="settings-section hidden" id="aiSection">
+          <div class="settings-section-header">
+            <h2 class="panel-title">AI Integration</h2>
+          </div>
+          <div class="settings-section-body" id="aiSettings"></div>
+        </section>
+
+        <section class="settings-section hidden" id="gmailSection">
+          <div class="settings-section-header">
+            <h2 class="panel-title">Gmail</h2>
+          </div>
+          <div class="settings-section-body" id="gmailSettings"></div>
+        </section>
+
+        <section class="settings-section hidden" id="dataSection">
+          <div class="settings-section-header">
+            <h2 class="panel-title">Data Management</h2>
+          </div>
+          <div class="settings-section-body" id="dataSettings"></div>
+        </section>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" aria-live="polite"></div>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/backgrounds.js"></script>
+  <script src="js/starfield.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/ai.js"></script>
+  <script src="js/gmail.js"></script>
+  <script src="js/settings.js"></script>
+</body>
+</html>

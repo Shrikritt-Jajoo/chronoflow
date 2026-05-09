@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Stats — ChronoFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/grain.css">
+  <link rel="stylesheet" href="css/starfield.css">
+  <link rel="stylesheet" href="css/shell.css">
+  <link rel="stylesheet" href="css/stats.css">
+</head>
+<body class="stats-body">
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <div class="page-bg">
+    <canvas id="bgCanvas" class="page-bg-canvas"></canvas>
+    <div class="grain"></div>
+  </div>
+
+  <nav class="nav-shell" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <div class="nav-logo"><svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <span class="nav-brand-text">ChronoFlow</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link">Home</a>
+        <a href="planner.html" class="nav-link">Planner</a>
+        <a href="focus.html" class="nav-link">Focus</a>
+        <a href="stats.html" class="nav-link active">Stats</a>
+        <a href="settings.html" class="nav-link">Settings</a>
+      </div>
+      <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme"></button>
+    </div>
+  </nav>
+
+  <main id="main" class="stats-shell">
+    <header class="page-header">
+      <h1 class="page-title">Stats</h1>
+      <p class="page-subtitle">Your productivity at a glance</p>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-value" id="statTasksDone">—</div>
+        <div class="stat-label">Tasks Completed Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statFocusTime">—</div>
+        <div class="stat-label">Focus Minutes Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statStreak">—</div>
+        <div class="stat-label">Day Streak 🔥</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-value" id="statCompletion">—</div>
+        <div class="stat-label">Completion Rate</div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-header">
+        <span class="panel-title">Weekly Focus (minutes)</span>
+      </div>
+      <div class="panel-body">
+        <div class="weekly-chart" id="weeklyChart"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:24px">
+      <div class="panel-header">
+        <span class="panel-title">Recent Sessions</span>
+      </div>
+      <div class="panel-body" id="recentSessions">
+        <div class="empty-state">No focus sessions recorded yet.</div>
+      </div>
+    </div>
+  </main>
+
+  <div class="toast-container" aria-live="polite"></div>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/backgrounds.js"></script>
+  <script src="js/starfield.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/stats.js"></script>
+</body>
+</html>

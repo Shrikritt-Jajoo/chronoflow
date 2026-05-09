@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ChronoFlow</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/reset.css">
+  <link rel="stylesheet" href="css/grain.css">
+  <link rel="stylesheet" href="css/starfield.css">
+  <link rel="stylesheet" href="css/shell.css">
+  <link rel="stylesheet" href="css/home.css">
+</head>
+<body class="home-body">
+  <a href="#main" class="skip-link">Skip to content</a>
+
+  <div class="home-bg">
+    <canvas id="bgCanvas" class="home-bg-canvas"></canvas>
+    <div class="grain"></div>
+  </div>
+
+  <nav class="nav-shell" role="navigation" aria-label="Main navigation">
+    <div class="nav-inner">
+      <a href="index.html" class="nav-brand">
+        <div class="nav-logo"><svg viewBox="0 0 36 36" fill="none" xmlns="http://www.w3.org/2000/svg"></svg></div>
+        <span class="nav-brand-text">ChronoFlow</span>
+      </a>
+      <div class="nav-links">
+        <a href="index.html" class="nav-link active">Home</a>
+        <a href="planner.html" class="nav-link">Planner</a>
+        <a href="focus.html" class="nav-link">Focus</a>
+        <a href="stats.html" class="nav-link">Stats</a>
+        <a href="settings.html" class="nav-link">Settings</a>
+      </div>
+      <button class="theme-toggle" data-theme-toggle aria-label="Toggle theme"></button>
+    </div>
+  </nav>
+
+  <main id="main" class="home-content">
+    <div class="clock-display" id="clockTime">00:00:00</div>
+    <div class="clock-date" id="clockDate"></div>
+    <div class="clock-greeting" id="clockGreeting"></div>
+
+    <div class="home-metrics">
+      <div class="home-metric">
+        <span class="home-metric-value" id="pendingCount">—</span>
+        <span class="home-metric-label">Tasks Pending</span>
+      </div>
+      <div class="home-metric">
+        <span class="home-metric-value" id="plannedMinutes">—</span>
+        <span class="home-metric-label">Minutes Planned</span>
+      </div>
+      <div class="home-metric">
+        <span class="home-metric-value" id="nextBlock">—</span>
+        <span class="home-metric-label">Next Block</span>
+      </div>
+    </div>
+  </main>
+
+  <div class="home-actions visible">
+    <a href="planner.html" class="home-action-btn">Open Planner</a>
+    <a href="focus.html" class="home-action-btn">Start Focus</a>
+    <a href="stats.html" class="home-action-btn">View Stats</a>
+  </div>
+
+  <div class="toast-container" aria-live="polite"></div>
+
+  <script src="js/db.js"></script>
+  <script src="js/utils.js"></script>
+  <script src="js/state.js"></script>
+  <script src="js/backgrounds.js"></script>
+  <script src="js/starfield.js"></script>
+  <script src="js/shell.js"></script>
+  <script src="js/home.js"></script>
+</body>
+</html>
