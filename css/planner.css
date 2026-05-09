@@ -1,50 +1,114 @@
 /* =========================================================
-   ChronoFlow Planner Page
+   ChronoFlow — Planner Page
+   Tasks, slots, schedule
    ========================================================= */
-.planner-body { padding-top: var(--nav-height); min-height: 100vh; position: relative; overflow-y: auto; }
-.planner-shell {
-  position: relative; z-index: 10;
-  max-width: var(--content-max); margin: 0 auto; padding: var(--space-6);
-  display: grid; grid-template-columns: var(--sidebar-width) 1fr var(--sidebar-width);
-  gap: var(--space-5); min-height: calc(100vh - var(--nav-height)); align-items: start;
+
+.planner-body  { background: var(--color-bg); min-height: 100dvh; }
+.planner-shell { max-width: 960px; margin: 0 auto; padding: 6rem var(--space-lg) var(--space-2xl); }
+
+/* ---- Task sort row --------------------------------------------------- */
+.task-sort-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: var(--space-sm);
 }
-.planner-sidebar, .planner-detail { display: flex; flex-direction: column; gap: var(--space-5); }
-.planner-main { display: flex; flex-direction: column; gap: var(--space-5); }
+.task-sort-label {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  white-space: nowrap;
+}
+.task-sort-select {
+  font-size: var(--text-xs);
+  background: var(--color-bg-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  border-radius: var(--radius-sm);
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+}
+
+/* ---- Task cards ------------------------------------------------------ */
 .task-card {
-  background: var(--color-surface-2);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
-  padding: var(--space-4); display: flex; justify-content: space-between;
-  align-items: flex-start; gap: var(--space-3);
-  transition: all var(--transition-fast); margin-bottom: var(--space-3);
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  transition: border-color var(--transition-fast), opacity var(--transition-base);
 }
-.task-card:hover { border-color: var(--color-border-hover); box-shadow: var(--glow-edge); }
-.task-card.done  { opacity: 0.45; }
-.task-card-title { font-weight: 600; color: var(--color-text); margin-bottom: var(--space-2); font-size: var(--text-sm); }
-.task-card-meta  { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-.task-card-actions { display: flex; flex-direction: column; gap: var(--space-2); flex-shrink: 0; }
+.task-card:hover { border-color: var(--color-border-strong); }
+
+/* Fix 5: completed task visual treatment */
+.task-card.done {
+  opacity: 0.4;
+}
+.task-card.done .task-card-title {
+  text-decoration: line-through;
+  color: var(--color-text-muted);
+}
+
+.task-card-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  margin-bottom: var(--space-xs);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.task-card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-xs);
+  align-items: center;
+}
+.task-card-actions {
+  display: flex;
+  gap: var(--space-xs);
+  flex-shrink: 0;
+}
+
+/* ---- Slot cards ------------------------------------------------------ */
 .slot-card {
-  background: var(--color-surface-2);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
-  padding: var(--space-4); display: flex; justify-content: space-between;
-  align-items: flex-start; gap: var(--space-3);
-  transition: all var(--transition-fast); margin-bottom: var(--space-3);
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-md);
+  padding: var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-bottom: var(--space-sm);
+  transition: border-color var(--transition-fast);
 }
-.slot-card-title { font-weight: 600; color: var(--color-text); font-size: var(--text-sm); }
-.slot-card-time  { font-size: var(--text-xs); color: var(--color-text-faint); margin-top: var(--space-1); }
+.slot-card:hover     { border-color: var(--color-border-strong); }
+.slot-card-title     { font-size: var(--text-sm); font-weight: var(--font-weight-medium); color: var(--color-text); }
+.slot-card-time      { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 4px; }
+
+/* ---- Schedule blocks ------------------------------------------------- */
 .schedule-block {
-  background: var(--color-accent-blue-dim);
-  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(140,166,255,0.2); border-radius: var(--radius-lg);
-  padding: var(--space-4); margin-bottom: var(--space-3);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-elevated);
+  border-left: 3px solid var(--color-accent-cyan);
+  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
+  margin-bottom: var(--space-xs);
 }
-.schedule-block.break { background: var(--color-accent-cyan-dim); border-color: rgba(116,240,211,0.2); }
-.schedule-block-header { display: flex; justify-content: space-between; align-items: center; }
-.schedule-block-title  { font-weight: 600; font-size: var(--text-sm); color: var(--color-text); }
-.schedule-block-time   { font-size: var(--text-xs); color: var(--color-text-faint); margin-top: var(--space-1); }
-@media (max-width: 1024px) {
-  .planner-shell { grid-template-columns: 1fr; }
-  .planner-sidebar, .planner-detail { display: none; }
-  .planner-sidebar.open, .planner-detail.open { display: flex; }
+.schedule-block.break {
+  border-left-color: var(--color-border);
+  opacity: 0.6;
 }
+.schedule-block-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-sm);
+  margin-bottom: 4px;
+}
+.schedule-block-title { font-size: var(--text-sm); font-weight: var(--font-weight-medium); color: var(--color-text); }
+.schedule-block-time  { font-size: var(--text-xs); color: var(--color-text-muted); }

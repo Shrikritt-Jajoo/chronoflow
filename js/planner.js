@@ -3,6 +3,9 @@
 // Task CRUD, slot management, schedule rendering
 // =========================================================
 const Planner = {
+  // Fix 3: persist chosen sort order
+  _sortOrder: localStorage.getItem('cf-task-sort') || 'priority',
+
   async init() {
     await AppState.init();
     this.render();
@@ -18,35 +21,69 @@ const Planner = {
     await this.renderSchedule();
   },
 
+  // Fix 3: sort selector + Fix 5: completed tasks fade + sort to bottom
   async renderTasks() {
     const el = document.getElementById('taskList');
     if (!el) return;
-    const tasks = AppState.get('tasks').sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    let tasks = [...(AppState.get('tasks') || [])];
     if (!tasks.length) { el.innerHTML = '<div class="empty-state">No tasks yet — add one below.</div>'; return; }
-    el.innerHTML = tasks.map(task => `
-      <div class="task-card${task.isCompleted ? ' done' : ''}" data-id="${task.id}">
-        <div style="flex:1;min-width:0">
-          <div class="task-card-title">${Utils.escapeHtml(task.title)}</div>
-          <div class="task-card-meta">
-            <span class="tag">${task.estimatedMinutes || 30} min</span>
-            <span class="tag tag-cyan">P${task.priority || 3}</span>
-            <span class="tag tag-violet">${task.context || 'focus'}</span>
-            ${task.deadline ? `<span class="tag tag-warning">Due ${Utils.formatDateTime(new Date(task.deadline))}</span>` : ''}
-            ${task.progressPercent > 0 ? `<span class="tag">${task.progressPercent}%</span>` : ''}
+
+    // Sort active tasks; completed always go to the bottom
+    const active    = tasks.filter(t => !t.isCompleted);
+    const completed = tasks.filter(t =>  t.isCompleted);
+
+    const sortFn = {
+      priority:  (a, b) => (a.priority || 3) - (b.priority || 3),
+      deadline:  (a, b) => new Date(a.deadline || '9999') - new Date(b.deadline || '9999'),
+      progress:  (a, b) => (b.progressPercent || 0) - (a.progressPercent || 0),
+      created:   (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+    }[this._sortOrder] || ((a, b) => (a.priority || 3) - (b.priority || 3));
+
+    active.sort(sortFn);
+
+    const sorted = [...active, ...completed];
+
+    el.innerHTML = `
+      <div class="task-sort-row">
+        <label class="task-sort-label">Sort by</label>
+        <select id="taskSortSelect" class="task-sort-select">
+          <option value="priority" ${this._sortOrder==='priority'?'selected':''}>Priority</option>
+          <option value="deadline" ${this._sortOrder==='deadline'?'selected':''}>Deadline</option>
+          <option value="progress" ${this._sortOrder==='progress'?'selected':''}>Progress</option>
+          <option value="created"  ${this._sortOrder==='created' ?'selected':''}>Newest first</option>
+        </select>
+      </div>` +
+      sorted.map(task => `
+        <div class="task-card${task.isCompleted ? ' done' : ''}" data-id="${task.id}">
+          <div style="flex:1;min-width:0">
+            <div class="task-card-title">${Utils.escapeHtml(task.title)}</div>
+            <div class="task-card-meta">
+              <span class="tag">${task.estimatedMinutes || 30} min</span>
+              <span class="tag tag-cyan">P${task.priority || 3}</span>
+              <span class="tag tag-violet">${task.context || 'focus'}</span>
+              ${task.deadline ? `<span class="tag tag-warning">Due ${Utils.formatDateTime(new Date(task.deadline))}</span>` : ''}
+              ${task.progressPercent > 0 ? `<span class="tag">${task.progressPercent}%</span>` : ''}
+            </div>
           </div>
-        </div>
-        <div class="task-card-actions">
-          <button class="btn btn-icon btn-ghost" data-focus="${task.id}" title="Focus">&#9654;</button>
-          <button class="btn btn-icon btn-ghost" data-edit="${task.id}" title="Edit">&#9998;</button>
-          <button class="btn btn-icon btn-ghost" data-delete="${task.id}" title="Delete">&#10005;</button>
-        </div>
-      </div>`).join('');
+          <div class="task-card-actions">
+            <button class="btn btn-icon btn-ghost" data-focus="${task.id}" title="Focus">&#9654;</button>
+            <button class="btn btn-icon btn-ghost" data-edit="${task.id}" title="Edit">&#9998;</button>
+            <button class="btn btn-icon btn-ghost" data-delete="${task.id}" title="Delete">&#10005;</button>
+          </div>
+        </div>`).join('');
+
+    // Wire sort selector
+    el.querySelector('#taskSortSelect')?.addEventListener('change', e => {
+      this._sortOrder = e.target.value;
+      localStorage.setItem('cf-task-sort', this._sortOrder);
+      this.renderTasks();
+    });
   },
 
   async renderSlots() {
     const el = document.getElementById('slotsList');
     if (!el) return;
-    const slots = AppState.get('slots').sort((a,b) => new Date(a.start) - new Date(b.start));
+    const slots = (AppState.get('slots') || []).sort((a,b) => new Date(a.start) - new Date(b.start));
     if (!slots.length) { el.innerHTML = '<div class="empty-state">No time slots added yet.</div>'; return; }
     el.innerHTML = slots.map(slot => `
       <div class="slot-card" data-id="${slot.id}">
@@ -62,8 +99,8 @@ const Planner = {
   async renderSchedule() {
     const el = document.getElementById('scheduleList');
     if (!el) return;
-    const tasks  = AppState.get('tasks');
-    const slots  = AppState.get('slots');
+    const tasks  = AppState.get('tasks') || [];
+    const slots  = AppState.get('slots') || [];
     const blocks = Scheduler.buildScheduleSync
       ? Scheduler.buildScheduleSync(tasks, slots)
       : await Scheduler.buildSchedule();
@@ -79,7 +116,6 @@ const Planner = {
   },
 
   bindEvents() {
-    // Task list actions (delegated)
     document.getElementById('taskList')?.addEventListener('click', async e => {
       const focusId  = e.target.closest('[data-focus]')?.dataset.focus;
       const editId   = e.target.closest('[data-edit]')?.dataset.edit;
@@ -88,12 +124,10 @@ const Planner = {
       if (editId)   this.openTaskModal(editId);
       if (deleteId) AppShell.confirm('Delete this task?', () => AppState.remove('tasks', deleteId));
     });
-
     document.getElementById('slotsList')?.addEventListener('click', async e => {
       const deleteId = e.target.closest('[data-deleteSlot]')?.dataset.deleteslot;
       if (deleteId) AppShell.confirm('Remove this time slot?', () => AppState.remove('slots', deleteId));
     });
-
     document.getElementById('addTaskBtn')?.addEventListener('click',  () => this.openTaskModal());
     document.getElementById('addSlotBtn')?.addEventListener('click',  () => this.openSlotModal());
     document.getElementById('buildScheduleBtn')?.addEventListener('click', () => this.renderSchedule());
@@ -148,7 +182,7 @@ const Planner = {
         progressPercent: task?.progressPercent || 0
       };
       if (task) { await AppState.update('tasks', task.id, data); AppShell.toast('Task updated', 'success'); }
-      else       { await AppState.add('tasks', { ...data, id: Utils.uid('task'), createdAt: new Date().toISOString() }); AppShell.toast('Task added', 'success'); }
+      else      { await AppState.add('tasks', { ...data, id: Utils.uid('task'), createdAt: new Date().toISOString() }); AppShell.toast('Task added', 'success'); }
       modal.remove();
     });
   },
@@ -163,7 +197,7 @@ const Planner = {
       <div class="modal">
         <div class="modal-header"><span class="panel-title">Add Time Slot</span></div>
         <div class="modal-body">
-          <div class="form-group"><label>Label</label><input id="sLabel" value="Morning work" ></div>
+          <div class="form-group"><label>Label</label><input id="sLabel" value="Morning work"></div>
           <div class="form-row">
             <div class="form-group"><label>Start</label><input type="datetime-local" id="sStart" value="${toLocal(now)}"></div>
             <div class="form-group"><label>End</label><input type="datetime-local" id="sEnd" value="${toLocal(later)}"></div>
@@ -185,8 +219,7 @@ const Planner = {
       if (!label || !start || !end) { AppShell.toast('All fields required', 'error'); return; }
       if (new Date(start) >= new Date(end)) { AppShell.toast('End must be after start', 'error'); return; }
       await AppState.add('slots', {
-        id: Utils.uid('slot'),
-        label,
+        id: Utils.uid('slot'), label,
         start: new Date(start).toISOString(),
         end:   new Date(end).toISOString(),
         energyLevel: parseInt(modal.querySelector('#sEnergy').value) || 3,

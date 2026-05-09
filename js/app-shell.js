@@ -40,11 +40,19 @@ const AppShell = {
   initNav() {
     const nav = document.querySelector('.nav-shell');
     if (!nav) return;
+    // Fix 1: only auto-hide on home page
+    const isHome = document.body.classList.contains('home-body') ||
+                   document.body.dataset.page === 'home';
+    if (!isHome) {
+      // Non-home pages: nav is always visible, never hidden
+      nav.classList.remove('hidden');
+      return;
+    }
     this.showNav();
-    document.addEventListener('mousemove', () => this.showNav());
-    document.addEventListener('keydown',   () => this.showNav());
-    document.addEventListener('touchstart',() => this.showNav());
-    document.addEventListener('scroll',    () => this.showNav());
+    document.addEventListener('mousemove',  () => this.showNav());
+    document.addEventListener('keydown',    () => this.showNav());
+    document.addEventListener('touchstart', () => this.showNav(), { passive: true });
+    document.addEventListener('scroll',     () => this.showNav(), { passive: true });
   },
 
   showNav() {
@@ -53,28 +61,33 @@ const AppShell = {
     nav.classList.remove('hidden');
     this.navVisible = true;
     clearTimeout(this.navTimeout);
+    // Only schedule hide on home page
+    const isHome = document.body.classList.contains('home-body') ||
+                   document.body.dataset.page === 'home';
+    if (!isHome) return;
     this.navTimeout = setTimeout(() => {
-      if (document.querySelector('.home-body')) return;
       nav.classList.add('hidden');
       this.navVisible = false;
     }, 3000);
   },
 
+  // Fix 11: unique gradient ID per logo to avoid SVG ID collision
   initLogo() {
     const logos = document.querySelectorAll('.nav-logo svg');
-    for (const svg of logos) {
+    logos.forEach((svg, idx) => {
+      const gid = `logoGrad-${idx}-${Math.random().toString(36).slice(2, 7)}`;
       svg.innerHTML = `
         <defs>
-          <linearGradient id="logoGrad" x1="0" y1="0" x2="1" y2="1">
+          <linearGradient id="${gid}" x1="0" y1="0" x2="1" y2="1">
             <stop offset="0%" stop-color="#74f0d3"/>
             <stop offset="100%" stop-color="#8ca6ff"/>
           </linearGradient>
         </defs>
-        <circle cx="18" cy="18" r="14" fill="none" stroke="url(#logoGrad)" stroke-width="2"/>
-        <circle cx="18" cy="18" r="3" fill="url(#logoGrad)"/>
-        <line x1="18" y1="18" x2="24" y2="12" stroke="url(#logoGrad)" stroke-width="2" stroke-linecap="round"/>
-        <line x1="18" y1="18" x2="18" y2="10" stroke="url(#logoGrad)" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>`;
-    }
+        <circle cx="18" cy="18" r="14" fill="none" stroke="url(#${gid})" stroke-width="2"/>
+        <circle cx="18" cy="18" r="3" fill="url(#${gid})"/>
+        <line x1="18" y1="18" x2="24" y2="12" stroke="url(#${gid})" stroke-width="2" stroke-linecap="round"/>
+        <line x1="18" y1="18" x2="18" y2="10" stroke="url(#${gid})" stroke-width="1.5" stroke-linecap="round" opacity="0.6"/>`;
+    });
   },
 
   toast(message, type = 'info', duration = 3000) {

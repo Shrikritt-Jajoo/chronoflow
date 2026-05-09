@@ -51,7 +51,6 @@ const Settings = {
         <div><div class="toggle-label">Show grid lines</div></div>
         <input type="checkbox" id="bgGrid" ${bg.grid ? 'checked' : ''}>
       </div>`;
-
     el.querySelectorAll('[data-bgmode]').forEach(btn => {
       btn.addEventListener('click', () => {
         Backgrounds.setMode(btn.dataset.bgmode);
@@ -97,7 +96,6 @@ const Settings = {
       <div class="form-actions">
         <button class="btn btn-primary" id="savePlanningBtn">Save Rules</button>
       </div>`;
-
     el.querySelector('#savePlanningBtn').addEventListener('click', async () => {
       await DB.put('settings', {
         key: 'main',
@@ -127,7 +125,6 @@ const Settings = {
         <button class="btn btn-primary"   id="connectGmailBtn">Connect Gmail</button>
         <button class="btn btn-ghost"     id="testEmailBtn">Send Test</button>
       </div>`;
-
     el.querySelector('#saveGmailBtn').addEventListener('click', async () => {
       await DB.put('gmailConfig', { key: 'main', clientId: el.querySelector('#gmailClientId').value.trim() });
       AppShell.toast('Client ID saved', 'success');
@@ -146,12 +143,10 @@ const Settings = {
     if (!el) return;
     const cfg  = AppState.get('aiConfig') || {};
     const jobs = AppState.get('registeredAiJobs') || [];
-    const hasKey = !!(cfg.geminiKey);
+    const hasKey    = !!(cfg.geminiKey);
     const serverMode = ChronoFlow.serverMode;
-
     el.innerHTML = `
       <p class="settings-hint">Your API key is stored locally and never sent anywhere except Google's servers.</p>
-
       <div class="form-group">
         <label>Gemini API Key</label>
         <div style="display:flex;gap:0.5rem;align-items:center">
@@ -160,7 +155,6 @@ const Settings = {
           <button class="btn btn-primary" id="saveAiBtn">Save</button>
         </div>
       </div>
-
       <div class="form-group">
         <label>Model</label>
         <select id="aiModel">
@@ -169,8 +163,6 @@ const Settings = {
           ).join('')}
         </select>
       </div>
-
-      <!-- AI Jobs -->
       <div class="panel-title" style="margin-top:2rem;margin-bottom:1rem">AI Jobs</div>
       ${!hasKey ? `<p class="settings-hint" style="color:var(--color-warning)">Save a Gemini API key above to enable AI jobs.</p>` : ''}
       <div class="ai-job-list" id="aiJobList">
@@ -184,56 +176,42 @@ const Settings = {
               </div>
             </div>
             <button class="btn btn-primary ai-job-run-btn" data-job-id="${Utils.escapeHtml(job.jobId)}"
-                    ${!hasKey ? 'disabled' : ''}>
-              Run
-            </button>
+                    ${!hasKey ? 'disabled' : ''}>Run</button>
           </div>`).join('') || '<p class="settings-hint">No jobs registered yet.</p>'}
       </div>
-
-      <!-- Version History (server mode only) -->
       <div class="panel-title" style="margin-top:2.5rem;margin-bottom:1rem">Version History
         ${!serverMode ? '<span class="tag" style="margin-left:0.5rem;opacity:0.5">server only</span>' : ''}
       </div>
       <div class="ai-versions-list" id="aiVersionsList">
         <p class="settings-hint" id="versionsLoading">Loading…</p>
       </div>`;
-
-    // Save key
     el.querySelector('#saveAiBtn').addEventListener('click', async () => {
       const geminiKey = el.querySelector('#aiKey').value.trim();
       const model     = el.querySelector('#aiModel').value;
       await DB.put('aiConfig', { key: 'main', geminiKey, model });
       await AppState.set('aiConfig', { key: 'main', geminiKey, model });
       AppShell.toast('AI config saved', 'success');
-      this.renderAI(); // re-render to enable/disable run buttons
+      this.renderAI();
     });
-
-    // Model change (instant save)
     el.querySelector('#aiModel').addEventListener('change', async e => {
       const current = AppState.get('aiConfig') || {};
       const updated = { ...current, model: e.target.value };
       await DB.put('aiConfig', updated);
       await AppState.set('aiConfig', updated);
     });
-
-    // Run job buttons
     el.querySelectorAll('.ai-job-run-btn').forEach(btn => {
       btn.addEventListener('click', () => this._startJob(btn.dataset.jobId));
     });
-
-    // Load version history
     this._renderVersions();
   },
 
   async _renderVersions() {
     const el = document.getElementById('aiVersionsList');
     if (!el) return;
-
     if (!ChronoFlow.serverMode) {
       el.innerHTML = '<p class="settings-hint">Start the server to view version history.</p>';
       return;
     }
-
     try {
       const versions = await listVersions();
       if (!versions.length) {
@@ -246,11 +224,8 @@ const Settings = {
             <div class="ai-version-name">${Utils.escapeHtml(v.name)}</div>
             <div class="ai-version-date">${new Date(v.savedAt).toLocaleString()}</div>
           </div>
-          <button class="btn btn-ghost ai-version-restore" data-version="${Utils.escapeHtml(v.name)}">
-            Restore
-          </button>
+          <button class="btn btn-ghost ai-version-restore" data-version="${Utils.escapeHtml(v.name)}">Restore</button>
         </div>`).join('');
-
       el.querySelectorAll('.ai-version-restore').forEach(btn => {
         btn.addEventListener('click', () => {
           AppShell.confirm(
@@ -279,7 +254,6 @@ const Settings = {
         <button class="btn btn-secondary" id="exportBtn">Export JSON</button>
         <button class="btn btn-danger"    id="clearBtn">Clear All Data</button>
       </div>`;
-
     el.querySelector('#exportBtn').addEventListener('click', async () => {
       const stores = ['tasks','slots','scheduleBlocks','focusSessions','settings'];
       const data   = {};
@@ -289,7 +263,6 @@ const Settings = {
       const a    = Object.assign(document.createElement('a'), { href: url, download: `chronoflow-${Date.now()}.json` });
       a.click(); URL.revokeObjectURL(url);
     });
-
     el.querySelector('#clearBtn').addEventListener('click', () => {
       AppShell.confirm('This will permanently delete ALL your data. Are you sure?', async () => {
         for (const s of ['tasks','slots','scheduleBlocks','focusSessions','settings','gmailConfig','aiConfig'])
@@ -300,14 +273,17 @@ const Settings = {
     });
   },
 
-  // ---- Nav --------------------------------------------------------------
+  // ---- Nav — Fix 2+6: use class toggling, no inline style.display ------
   bindNavEvents() {
-    document.querySelectorAll('.settings-nav-item').forEach(btn => {
+    const items    = document.querySelectorAll('.settings-nav-item');
+    const sections = document.querySelectorAll('.settings-section');
+    items.forEach(btn => {
       btn.addEventListener('click', () => {
-        document.querySelectorAll('.settings-nav-item').forEach(b => b.classList.remove('active'));
+        items.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
-        document.querySelectorAll('.settings-section').forEach(s => {
-          s.style.display = s.id === btn.dataset.section + 'Section' ? '' : 'none';
+        sections.forEach(s => {
+          const isTarget = s.id === btn.dataset.section + 'Section';
+          s.classList.toggle('hidden', !isTarget);
         });
       });
     });
@@ -316,13 +292,11 @@ const Settings = {
   // ================================================================
   // AI Conversation Drawer
   // ================================================================
-
   _bindDrawer() {
     document.getElementById('aiDrawerClose')?.addEventListener('click',    () => this._closeDrawer());
     document.getElementById('aiDrawerBackdrop')?.addEventListener('click', () => this._closeDrawer());
     document.getElementById('aiChatForm')?.addEventListener('submit', e => {
-      e.preventDefault();
-      this._sendChat();
+      e.preventDefault(); this._sendChat();
     });
     document.getElementById('aiPlanApprove')?.addEventListener('click', () => this._approvePlan());
     document.getElementById('aiPlanCancel')?.addEventListener('click',  () => this._cancelSession());
@@ -336,9 +310,9 @@ const Settings = {
     document.getElementById('aiDrawer').classList.add('open');
     document.getElementById('aiDrawerBackdrop').classList.add('visible');
     document.getElementById('aiDrawerMessages').innerHTML = '';
-    document.getElementById('aiPlanPanel').style.display    = 'none';
-    document.getElementById('aiResultPanel').style.display  = 'none';
-    document.getElementById('aiChatForm').style.display     = '';
+    document.getElementById('aiPlanPanel').style.display   = 'none';
+    document.getElementById('aiResultPanel').style.display = 'none';
+    document.getElementById('aiChatForm').style.display    = '';
     this._setPhaseLabel('Phase 1 — Understanding');
   },
 
@@ -346,10 +320,7 @@ const Settings = {
     document.getElementById('aiDrawer').setAttribute('aria-hidden', 'true');
     document.getElementById('aiDrawer').classList.remove('open');
     document.getElementById('aiDrawerBackdrop').classList.remove('visible');
-    if (this._activeSession) {
-      this._activeSession.end();
-      this._activeSession = null;
-    }
+    if (this._activeSession) { this._activeSession.end(); this._activeSession = null; }
   },
 
   _setPhaseLabel(text) {
@@ -378,30 +349,25 @@ const Settings = {
     return div;
   },
 
-  _removeThinking() {
-    document.getElementById('aiThinking')?.remove();
-  },
+  _removeThinking() { document.getElementById('aiThinking')?.remove(); },
 
-  // Start a job session and open drawer
   async _startJob(jobId) {
     const jobs = AppState.get('registeredAiJobs') || [];
     const job  = jobs.find(j => j.jobId === jobId);
     if (!job) return;
-
     this._openDrawer(job.label);
     this._appendMessage('system', `Starting "${job.label}"… Ask me anything or describe what you want.`);
-
     try {
       const session = await AI.startSession(jobId, {
-        onPhaseChange: ({ phase, summary, approvedSteps }) => {
+        onPhaseChange: ({ phase, summary }) => {
           if (phase === 2) {
             this._setPhaseLabel('Phase 2 — Plan');
             if (summary) this._appendMessage('model', `✓ Understood: ${summary}`);
+            // Fix 9: show transition message before hiding chat
+            this._appendMessage('system', '✓ Ready to plan. Review the steps below.');
             this._showPlanUI();
           }
-          if (phase === 3) {
-            this._setPhaseLabel('Phase 3 — Executing');
-          }
+          if (phase === 3) this._setPhaseLabel('Phase 3 — Executing');
         },
         onError: err => {
           this._removeThinking();
@@ -409,9 +375,7 @@ const Settings = {
         }
       });
       this._activeSession = session;
-    } catch (e) {
-      this._closeDrawer();
-    }
+    } catch { this._closeDrawer(); }
   },
 
   async _sendChat() {
@@ -420,13 +384,11 @@ const Settings = {
     if (!msg || !this._activeSession) return;
     input.value = '';
     this._appendMessage('user', msg);
-
     const thinking = this._appendThinking();
     document.getElementById('aiSendBtn').disabled = true;
     try {
       const { text, phaseAdvanced } = await this._activeSession.chat(msg);
       this._removeThinking();
-      // Only show text if not a phase-signal JSON blob
       if (!phaseAdvanced) this._appendMessage('model', text);
     } catch (e) {
       this._removeThinking();
@@ -442,7 +404,6 @@ const Settings = {
     document.getElementById('aiPlanPanel').style.display = '';
     const stepsEl = document.getElementById('aiPlanSteps');
     stepsEl.innerHTML = '<p class="settings-hint">Generating plan…</p>';
-
     try {
       const { steps } = await this._activeSession.getPlan();
       this._approvedSteps = [...steps];
@@ -458,34 +419,24 @@ const Settings = {
 
   async _approvePlan() {
     const checkboxes = document.querySelectorAll('#aiPlanSteps input[type=checkbox]');
-    const steps = Array.from(checkboxes)
-      .filter(c => c.checked)
-      .map(c => c.nextElementSibling.textContent);
-
-    if (!steps.length) {
-      AppShell.toast('Select at least one step', 'error');
-      return;
-    }
-
+    const steps = Array.from(checkboxes).filter(c => c.checked).map(c => c.nextElementSibling.textContent);
+    if (!steps.length) { AppShell.toast('Select at least one step', 'error'); return; }
     document.getElementById('aiPlanPanel').style.display = 'none';
     this._appendMessage('system', `Plan approved with ${steps.length} step(s). Executing…`);
-
     await this._activeSession.approvePlan(steps);
     await this._executeNextStep();
   },
 
   async _executeNextStep() {
-    const thinking = this._appendThinking();
+    this._appendThinking();
     try {
       const result = await this._activeSession.executeStep();
       this._removeThinking();
-
       if (!result || (!result.type && !result.plainEnglish)) {
         this._appendMessage('model', JSON.stringify(result));
         this._showSessionEndUI();
         return;
       }
-
       this._pendingResult = result;
       document.getElementById('aiResultDescription').textContent =
         result.plainEnglish || `Apply change of type: ${result.type}`;
@@ -502,13 +453,12 @@ const Settings = {
     if (!result) return;
     document.getElementById('aiResultPanel').style.display = 'none';
     this._pendingResult = null;
-
     const ok = await AIJobRunner.apply(result);
     if (ok) {
       this._activeSession.markAccepted();
       this._appendMessage('system', `✓ Applied: ${result.plainEnglish || result.type}`);
     } else {
-      this._appendMessage('system', `✗ Could not apply this change.`);
+      this._appendMessage('system', '✗ Could not apply this change.');
     }
     await this._executeNextStep();
   },
@@ -524,10 +474,7 @@ const Settings = {
     document.getElementById('aiPlanPanel').style.display   = 'none';
     document.getElementById('aiResultPanel').style.display = 'none';
     document.getElementById('aiChatForm').style.display    = '';
-    if (this._activeSession) {
-      await this._activeSession.end();
-      this._activeSession = null;
-    }
+    if (this._activeSession) { await this._activeSession.end(); this._activeSession = null; }
     this._appendMessage('system', 'Session cancelled. No changes were made.');
   },
 
@@ -539,9 +486,6 @@ const Settings = {
     div.innerHTML = `Session complete. <button class="btn btn-ghost" id="aiSessionDoneBtn" style="margin-left:0.5rem">Close</button>`;
     wrap.appendChild(div);
     document.getElementById('aiSessionDoneBtn')?.addEventListener('click', () => this._closeDrawer());
-    if (this._activeSession) {
-      this._activeSession.end();
-      this._activeSession = null;
-    }
+    if (this._activeSession) { this._activeSession.end(); this._activeSession = null; }
   }
 };
