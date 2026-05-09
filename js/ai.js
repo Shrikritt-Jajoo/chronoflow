@@ -4,31 +4,15 @@
 // Gemini API via direct fetch (no SDK needed)
 // =========================================================
 
-// ---- Config ------------------------------------------------------------
 const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models';
 const DEFAULT_MODEL = 'gemini-2.0-flash';
 
-// Phase signal the AI must include to advance from phase 1 → 2
 const PHASE1_SIGNAL = '"phase":"understood"';
-// Phase signal to advance from phase 2 → 3
 const PHASE2_SIGNAL = '"phase":"plan_approved"';
 
-// ---- AI Session --------------------------------------------------------
-// One session per user-initiated change. Manages conversation history,
-// phase state, snapshot lifecycle, and file read/write.
-
 const AI = {
-
-  // ---- Internal state --------------------------------------------------
   _session: null,
 
-  // ---- Public: start a session ----------------------------------------
-  /**
-   * Begin a new AI session for a registered job.
-   * @param {string} jobId  - matches registeredAiJobs[].jobId
-   * @param {object} [opts] - { onMessage, onPhaseChange, onError }
-   * @returns {AISession}
-   */
   async startSession(jobId, opts = {}) {
     if (this._session) this._session._cleanup();
 
@@ -47,9 +31,6 @@ const AI = {
     return session;
   },
 
-  // ---- Public: one-shot helpers (no session state) --------------------
-
-  /** Read a project file from the server. Returns content string or null. */
   async readFile(path) {
     if (!ChronoFlow.serverMode) return null;
     try {
@@ -60,7 +41,6 @@ const AI = {
     } catch { return null; }
   },
 
-  /** Write a project file via server. Returns true on success. */
   async writeFile(path, content) {
     if (!ChronoFlow.serverMode) return false;
     try {
@@ -73,44 +53,31 @@ const AI = {
     } catch { return false; }
   },
 
-  /** Basic JS syntax check via Function constructor. */
   syntaxCheck(code) {
     try { new Function(code); return { ok: true }; }
     catch (e) { return { ok: false, error: e.message }; }
   }
 };
 
-// ---- AISession class ---------------------------------------------------
 class AISession {
   constructor(job, cfg, opts) {
     this.job      = job;
     this.cfg      = cfg;
-    this.opts     = opts;           // { onMessage, onPhaseChange, onError }
-    this.history  = [];             // Gemini contents array
-    this.phase    = 1;              // 1=understand, 2=plan, 3=execute
-    this.snapName = null;           // set when snapshot is taken
-    this.accepted = false;          // true if user accepted at least one change
+    this.opts     = opts;
+    this.history  = [];
+    this.phase    = 1;
+    this.snapName = null;
+    this.accepted = false;
     this._active  = true;
   }
 
-  // ---- Phase 1: conversational understanding -------------------------
-  /**
-   * Send a user message and get AI response.
-   * AI signals phase advance by including the phase signal JSON in response.
-   * @param {string} userMsg
-   * @returns {{ text: string, phaseAdvanced: bool, summary: string|null }}
-   */
   async chat(userMsg) {
     this._assertActive();
-
     this.history.push({ role: 'user', parts: [{ text: userMsg }] });
-
     const systemPrompt = this._buildSystemPrompt();
     const text = await this._callGemini(systemPrompt, this.history);
-
     this.history.push({ role: 'model', parts: [{ text }] });
 
-    // Check for phase 1 → 2 advance signal
     let phaseAdvanced = false;
     let summary = null;
     if (this.phase === 1 && text.includes(PHASE1_SIGNAL)) {
@@ -127,12 +94,6 @@ class AISession {
     return { text, phaseAdvanced, summary };
   }
 
-  // ---- Phase 2: implementation plan ----------------------------------
-  /**
-   * Request the implementation plan.
-   * AI returns array of plain-English steps.
-   * @returns {{ steps: string[], raw: string }}
-   */
   async getPlan() {
     this._assertActive();
     if (this.phase !== 2) throw new Error('Not in plan phase.');
@@ -149,18 +110,12 @@ class AISession {
     this.history.push({ role: 'model', parts: [{ text }] });
 
     const parsed = _safeParseJSON(text);
-    const steps  = parsed?.steps ?? [text]; // fallback: treat as single step
+    const steps  = parsed?.steps ?? [text];
     return { steps, raw: text };
   }
 
-  /**
-   * User approves the plan (possibly with removed steps).
-   * Takes a snapshot, advances to phase 3.
-   * @param {string[]} approvedSteps - subset of steps user kept
-   */
   async approvePlan(approvedSteps) {
     this._assertActive();
-    // Take snapshot before any writes
     const ts = Date.now();
     this.snapName = `pre-${this.job.jobId}-${ts}`;
     await takeSnapshot(this.snapName);
@@ -168,7 +123,6 @@ class AISession {
     this.phase = 3;
     this.opts.onPhaseChange?.({ phase: 3, approvedSteps });
 
-    // Inform AI which steps were approved
     const msg = [
       'Plan approved. Proceed with these steps only:',
       approvedSteps.map((s, i) => `${i+1}. ${s}`).join('\n'),
@@ -179,17 +133,10 @@ class AISession {
     this.history.push({ role: 'user', parts: [{ text: msg }] });
   }
 
-  // ---- Phase 3: execute -----------------------------------------------
-  /**
-   * Execute next step — get AI result for one step.
-   * @param {object} [extraContext] - additional data to inject (file contents, store data)
-   * @returns {{ type: string, payload: object, plainEnglish: string }}
-   */
   async executeStep(extraContext = {}) {
     this._assertActive();
     if (this.phase !== 3) throw new Error('Not in execute phase.');
 
-    // Inject any extra context
     if (Object.keys(extraContext).length > 0) {
       const ctxMsg = `Context for this step:\n${JSON.stringify(extraContext, null, 2)}`;
       this.history.push({ role: 'user', parts: [{ text: ctxMsg }] });
@@ -202,24 +149,14 @@ class AISession {
     return parsed;
   }
 
-  // ---- Accept / reject -----------------------------------------------
-  /** Call when user accepts at least one suggestion. */
   markAccepted() { this.accepted = true; }
 
-  // ---- Session end ----------------------------------------------------
-  /**
-   * End session cleanly.
-   * If nothing was accepted, silently deletes the snapshot.
-   * If something was accepted, renames snapshot to post-{jobId}-{ts}.
-   */
   async end(userLabel = null) {
     this._active = false;
     if (this.snapName) {
       if (!this.accepted) {
-        // User cancelled or rejected everything — no record needed
         await deleteSnapshot(this.snapName);
       } else {
-        // Keep snapshot, rename to meaningful name
         const finalName = userLabel
           ? userLabel.replace(/[^a-zA-Z0-9_\-\.]/g, '_').slice(0, 64)
           : `post-${this.job.jobId}-${Date.now()}`;
@@ -234,7 +171,6 @@ class AISession {
     if (AI._session === this) AI._session = null;
   }
 
-  // ---- Internal helpers -----------------------------------------------
   _assertActive() {
     if (!this._active) throw new Error('Session has ended.');
   }
@@ -278,10 +214,7 @@ class AISession {
     const body = {
       system_instruction: { parts: [{ text: systemPrompt }] },
       contents: history,
-      generationConfig: {
-        temperature: 0.4,
-        maxOutputTokens: 8192
-      }
+      generationConfig: { temperature: 0.4, maxOutputTokens: 8192 }
     };
 
     const r = await fetch(url, {
@@ -303,17 +236,24 @@ class AISession {
 // ---- Utilities ---------------------------------------------------------
 
 /**
- * Safely parse JSON from AI response.
- * Handles markdown code fences (```json ... ```) Gemini sometimes wraps output in.
+ * MEDIUM-5 + LOW-5 fix: robustly strip markdown fences and leading prose.
+ * Old approach used startsWith('```') which fails if there is leading
+ * whitespace or prose before the fence. New approach:
+ * 1. Use a regex replace to strip everything up to and including any
+ *    opening fence, regardless of leading content.
+ * 2. Strip the closing fence.
+ * 3. Then use first-brace / last-brace extraction as before — but now
+ *    operating on clean JSON-only content so stray braces in prose
+ *    can't trick it.
  */
 function _safeParseJSON(text) {
   if (!text) return null;
-  // Strip markdown fences
-  let clean = text.trim();
-  if (clean.startsWith('```')) {
-    clean = clean.replace(/^```[a-z]*\n?/, '').replace(/\n?```$/, '').trim();
-  }
-  // Find first { or [ and last } or ]
+  let clean = text
+    .replace(/^[\s\S]*?```[a-z]*\n?/, '')  // strip everything up to+including opening fence
+    .replace(/\n?```[\s\S]*$/, '')          // strip closing fence and anything after
+    .trim();
+  // If no fence was present, clean === trimmed original — that's fine.
+  if (clean === text.trim()) clean = text.trim();
   const first = clean.search(/[{[]/);
   const last  = Math.max(clean.lastIndexOf('}'), clean.lastIndexOf(']'));
   if (first === -1 || last === -1) return null;
@@ -324,16 +264,8 @@ function _safeParseJSON(text) {
   }
 }
 
-// ---- AIJobRunner -------------------------------------------------------
-// Thin wrapper that loads input data for built-in jobs and feeds it to a session.
-
 const AIJobRunner = {
 
-  /**
-   * Collect input data for a job based on its inputSources.
-   * @param {string[]} sources - e.g. ['tasks', 'slots', 'focusSessions']
-   * @returns {object} - keyed by source name
-   */
   async gatherInputs(sources) {
     const result = {};
     for (const src of sources) {
@@ -343,34 +275,24 @@ const AIJobRunner = {
         result[src] = [];
       }
     }
-    // Always include today's date and settings
-    result.today   = new Date().toISOString().split('T')[0];
+    result.today    = new Date().toISOString().split('T')[0];
     result.settings = AppState.get('settings') ?? {};
     return result;
   },
 
-  /**
-   * Apply an accepted AI result to the app.
-   * Handles css-tokens, file, data, register-job types.
-   * @param {object} result - parsed AI result object
-   * @returns {boolean} success
-   */
   async apply(result) {
     try {
       switch (result.type) {
 
         case 'css-tokens': {
-          // Build user-theme.css content from accepted token overrides
           const lines = Object.entries(result.tokens)
             .map(([k, v]) => `  ${k}: ${v};`);
           const existing = await AI.readFile('css/user-theme.css') || ':root {\n}';
-          // Merge: parse existing vars, override/add new ones
           const merged = _mergeTokensIntoCSS(existing, result.tokens);
           return await AI.writeFile('css/user-theme.css', merged);
         }
 
         case 'file': {
-          // JS syntax check before writing
           if (result.path.endsWith('.js')) {
             const check = AI.syntaxCheck(result.content);
             if (!check.ok) {
@@ -384,6 +306,9 @@ const AIJobRunner = {
         case 'data': {
           const items = Array.isArray(result.items) ? result.items : [result.items];
           for (const item of items) {
+            // MEDIUM-3 fix: ensure item has an id field matching the store keyPath.
+            // Auto-assign a uid if missing so IDB never throws DataError.
+            if (!item.id) item.id = Utils.uid(result.store);
             await AppState.add(result.store, item);
           }
           return true;
@@ -393,7 +318,7 @@ const AIJobRunner = {
           const jobs = AppState.get('registeredAiJobs') || [];
           const existing = jobs.findIndex(j => j.jobId === result.job.jobId);
           if (existing >= 0) {
-            await AppState.update('registeredAiJobs', result.job.jobId, result.job);
+            await AppState.update('registeredAiJobs', result.job.id || result.job.jobId, result.job);
           } else {
             await AppState.add('registeredAiJobs', { ...result.job, id: result.job.jobId });
           }
@@ -412,7 +337,6 @@ const AIJobRunner = {
   }
 };
 
-// ---- CSS token merge helper --------------------------------------------
 function _mergeTokensIntoCSS(existingCSS, newTokens) {
   let css = existingCSS;
   for (const [token, value] of Object.entries(newTokens)) {
@@ -420,7 +344,6 @@ function _mergeTokensIntoCSS(existingCSS, newTokens) {
     if (pattern.test(css)) {
       css = css.replace(pattern, `$1${value};`);
     } else {
-      // Insert before closing brace of :root
       css = css.replace(/}\s*$/, `  ${token}: ${value};\n}`);
     }
   }

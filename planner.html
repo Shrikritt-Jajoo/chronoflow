@@ -39,7 +39,6 @@
   </nav>
 
   <main id="main" class="planner-shell">
-    <!-- Sidebar: Backlog -->
     <aside class="planner-sidebar">
       <div class="panel">
         <div class="panel-header">
@@ -50,10 +49,8 @@
           <div class="empty-state">No tasks yet.</div>
         </div>
       </div>
-      <!-- Fix 10: taskFormPanel removed (dead static form — modals used instead) -->
     </aside>
 
-    <!-- Main: Schedule -->
     <section class="planner-main">
       <div class="panel">
         <div class="panel-header">
@@ -69,19 +66,16 @@
       </div>
     </section>
 
-    <!-- Detail: Time Slots -->
     <aside class="planner-detail">
       <div class="panel">
         <div class="panel-header">
           <span class="panel-title">Time Slots</span>
           <button class="btn btn-sm btn-primary" id="addSlotBtn">+ Slot</button>
         </div>
-        <!-- Fix 5: correct ID slotList (was slotsList in JS) -->
         <div class="panel-body" id="slotList">
           <div class="empty-state">No time slots yet.</div>
         </div>
       </div>
-      <!-- Fix 10: slotFormPanel removed (dead static form — modals used instead) -->
     </aside>
   </main>
 
@@ -92,6 +86,7 @@
   <script src="js/state.js"></script>
   <script src="js/backgrounds.js"></script>
   <script src="js/starfield.js"></script>
+  <script src="js/app-shell.js"></script>
   <script src="js/shell.js"></script>
   <script src="js/scheduler.js"></script>
   <script src="js/ai.js"></script>

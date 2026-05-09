@@ -14,6 +14,7 @@ const Planner = {
     AppState.on('scheduleBlocks', () => this.render());
   },
 
+  // MEDIUM-6 fix: await each render sequentially to prevent interleaved parallel renders.
   async render() {
     await this.renderTasks();
     await this.renderSlots();
@@ -76,7 +77,6 @@ const Planner = {
   },
 
   async renderSlots() {
-    // Fix 5: correct ID is 'slotList' (no trailing s) per planner.html
     const el = document.getElementById('slotList');
     if (!el) return;
     const slots = (AppState.get('slots') || []).sort((a,b) => new Date(a.start) - new Date(b.start));
@@ -95,11 +95,8 @@ const Planner = {
   async renderSchedule() {
     const el = document.getElementById('scheduleList');
     if (!el) return;
-    const tasks  = AppState.get('tasks') || [];
-    const slots  = AppState.get('slots') || [];
-    const blocks = Scheduler.buildScheduleSync
-      ? Scheduler.buildScheduleSync(tasks, slots)
-      : await Scheduler.buildSchedule();
+    // HIGH-1 fix: buildScheduleSync doesn't exist — always use async buildSchedule().
+    const blocks = await Scheduler.buildSchedule();
     if (!blocks || !blocks.length) { el.innerHTML = '<div class="empty-state">Add tasks and time slots to generate a schedule.</div>'; return; }
     el.innerHTML = blocks.map(block => `
       <div class="schedule-block${block.isBreak ? ' break' : ''}">
@@ -121,15 +118,14 @@ const Planner = {
       if (deleteId) AppShell.confirm('Delete this task?', () => AppState.remove('tasks', deleteId));
     });
 
-    // Fix 5: correct ID 'slotList'
     document.getElementById('slotList')?.addEventListener('click', async e => {
-      const deleteId = e.target.closest('[data-deleteSlot]')?.dataset.deleteslot;
+      // HIGH-2 fix: dataset.deleteSlot (camelCase) — browser normalises data-deleteSlot attribute.
+      const deleteId = e.target.closest('[data-deleteSlot]')?.dataset.deleteSlot;
       if (deleteId) AppShell.confirm('Remove this time slot?', () => AppState.remove('slots', deleteId));
     });
 
     document.getElementById('addTaskBtn')?.addEventListener('click',  () => this.openTaskModal());
     document.getElementById('addSlotBtn')?.addEventListener('click',  () => this.openSlotModal());
-    // Fix 6: correct ID 'generateBtn'
     document.getElementById('generateBtn')?.addEventListener('click', () => this.renderSchedule());
   },
 
@@ -173,7 +169,6 @@ const Planner = {
       const data = {
         title,
         estimatedMinutes: newDuration,
-        // Fix 7: preserve remainingMinutes progress on edit
         remainingMinutes: task
           ? Math.min(task.remainingMinutes ?? newDuration, newDuration)
           : newDuration,

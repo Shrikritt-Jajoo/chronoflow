@@ -97,12 +97,15 @@ const Settings = {
         <button class="btn btn-primary" id="savePlanningBtn">Save Rules</button>
       </div>`;
     el.querySelector('#savePlanningBtn').addEventListener('click', async () => {
-      await DB.put('settings', {
+      const updated = {
         key: 'main',
         defaultDuration: parseInt(el.querySelector('#defaultDuration').value) || 30,
         bufferMinutes:   parseInt(el.querySelector('#bufferMinutes').value)   || 10,
         autoReschedule:  el.querySelector('#autoReschedule').checked
-      });
+      };
+      await DB.put('settings', updated);
+      // HIGH-6 fix: sync in-memory cache so Scheduler and other readers see fresh values.
+      await AppState.set('settings', updated);
       AppShell.toast('Planning rules saved', 'success');
     });
   },
@@ -195,7 +198,8 @@ const Settings = {
     });
     el.querySelector('#aiModel').addEventListener('change', async e => {
       const current = AppState.get('aiConfig') || {};
-      const updated = { ...current, model: e.target.value };
+      // HIGH-4 fix: always include key:'main' so DB.put never throws DataError on first use.
+      const updated = { key: 'main', ...current, model: e.target.value };
       await DB.put('aiConfig', updated);
       await AppState.set('aiConfig', updated);
     });
@@ -273,7 +277,6 @@ const Settings = {
     });
   },
 
-  // ---- Nav — Fix 2+6: use class toggling, no inline style.display ------
   bindNavEvents() {
     const items    = document.querySelectorAll('.settings-nav-item');
     const sections = document.querySelectorAll('.settings-section');
@@ -363,7 +366,6 @@ const Settings = {
           if (phase === 2) {
             this._setPhaseLabel('Phase 2 — Plan');
             if (summary) this._appendMessage('model', `✓ Understood: ${summary}`);
-            // Fix 9: show transition message before hiding chat
             this._appendMessage('system', '✓ Ready to plan. Review the steps below.');
             this._showPlanUI();
           }

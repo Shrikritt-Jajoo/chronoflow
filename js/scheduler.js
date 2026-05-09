@@ -104,6 +104,8 @@ const Scheduler = {
     return score;
   },
 
+  // MEDIUM-2 fix: wrap DB writes in try/catch; only mutate AppState after
+  // all puts succeed. Prevents partial-write corruption on tab close.
   async rescheduleUnfinished() {
     const tomorrow = new Date(Utils.todayStart());
     tomorrow.setDate(tomorrow.getDate() + 1);
@@ -115,10 +117,16 @@ const Scheduler = {
       }
     }
     const schedule = await this.buildSchedule(tomorrow);
-    await DB.clear('scheduleBlocks');
-    for (const block of schedule) await DB.put('scheduleBlocks', block);
-    AppState._data.scheduleBlocks = schedule;
-    AppState._emit('scheduleBlocks', schedule);
+    try {
+      await DB.clear('scheduleBlocks');
+      for (const block of schedule) await DB.put('scheduleBlocks', block);
+      // Only update in-memory state after all DB writes succeed.
+      AppState._data.scheduleBlocks = schedule;
+      AppState._emit('scheduleBlocks', schedule);
+    } catch (e) {
+      console.error('[Scheduler] rescheduleUnfinished DB write failed:', e);
+      AppShell.toast('Failed to save rescheduled blocks', 'error');
+    }
     return schedule;
   }
 };

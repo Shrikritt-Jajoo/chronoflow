@@ -43,6 +43,6 @@ const Utils = {
     if (!str) return '';
     return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
   },
-  deepClone(obj) { return JSON.parse(JSON.stringify(obj)); },
-  generateId() { return `${Date.now().toString(36)}${Math.random().toString(36).slice(2, 9)}`; }
+  deepClone(obj) { return JSON.parse(JSON.stringify(obj)); }
+  // LOW-1: Utils.generateId() removed — no callers; use Utils.uid() instead.
 };

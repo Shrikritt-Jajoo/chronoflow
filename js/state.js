@@ -108,7 +108,6 @@ const AppState = {
   _listeners: new Map(),
 
   async init() {
-    // Fix 8: settings is a singleton — load separately, NOT as array
     const arrayStores = [
       'goals', 'tasks', 'subtasks',
       'slots', 'scheduleBlocks', 'focusSessions', 'registeredAiJobs'
@@ -151,11 +150,12 @@ const AppState = {
     this._emit(store, this._data[store]);
   },
 
+  // FATAL-2 fix: always use 'id' as keyPath for all stores.
+  // registeredAiJobs keyPath is 'id' in DB — jobId is just an alias field.
   async update(store, id, changes) {
     const arr = this._data[store];
     if (!Array.isArray(arr)) return;
-    const kp  = store === 'registeredAiJobs' ? 'jobId' : 'id';
-    const idx = arr.findIndex(i => i[kp] === id);
+    const idx = arr.findIndex(i => i['id'] === id);
     if (idx === -1) return;
     const updated = { ...arr[idx], ...changes, updatedAt: new Date().toISOString() };
     await DB.put(store, updated);
@@ -164,10 +164,10 @@ const AppState = {
     return updated;
   },
 
+  // FATAL-3 fix: DB.delete uses 'id' keyPath, not 'jobId'.
   async remove(store, id) {
-    const kp = store === 'registeredAiJobs' ? 'jobId' : 'id';
     await DB.delete(store, id);
-    this._data[store] = (this._data[store] || []).filter(i => i[kp] !== id);
+    this._data[store] = (this._data[store] || []).filter(i => i['id'] !== id);
     this._emit(store, this._data[store]);
   },
 
