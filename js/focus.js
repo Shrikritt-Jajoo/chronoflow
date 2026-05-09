@@ -1,153 +1,204 @@
 // =========================================================
-// ChronoFlow Focus Mode — Timer, progress, wake lock
+// ChronoFlow Focus Mode
+// Matches focus.html DOM exactly:
+//   focusTimerDisplay, focusProgressFill, focusTaskSelect,
+//   focusStartBtn, focusPauseBtn, focusResetBtn,
+//   .focus-mode-btn[data-mode], postSessionOverlay,
+//   [data-post="done|progress"], wakeLockBtn, wakeLockStatus
 // =========================================================
 const FocusMode = {
-  active: false,
-  timerId: null,
-  startTime: null,
-  plannedMinutes: 25,
+  active: false, paused: false,
+  timerId: null, totalSeconds: 25 * 60, elapsedSeconds: 0,
   currentTaskId: null,
-  elapsedSeconds: 0,
+  _wakeLock: null,
 
-  async start(taskId) {
-    // Fix 8: guard against double-start
-    if (this.active) {
-      AppShell.toast('A focus session is already running', 'warning');
-      return;
-    }
-    const task = AppState.get('tasks').find(t => t.id === taskId);
-    if (!task) { AppShell.toast('Task not found', 'error'); return; }
-    this.currentTaskId  = taskId;
-    this.plannedMinutes = task.remainingMinutes || 25;
-    this.elapsedSeconds = 0;
-    this.active         = true;
-    this.startTime      = Date.now();
-    const overlay = document.getElementById('focusOverlay');
-    if (overlay) overlay.classList.add('active');
-    this.renderFocusUI(task);
-    this.startTimer();
+  init() {
+    this._els = {
+      display:   document.getElementById('focusTimerDisplay'),
+      fill:      document.getElementById('focusProgressFill'),
+      select:    document.getElementById('focusTaskSelect'),
+      startBtn:  document.getElementById('focusStartBtn'),
+      pauseBtn:  document.getElementById('focusPauseBtn'),
+      resetBtn:  document.getElementById('focusResetBtn'),
+      overlay:   document.getElementById('postSessionOverlay'),
+      modeBtns:  document.querySelectorAll('.focus-mode-btn'),
+    };
+    this._bindEvents();
+    this._populateTasks();
+    this._updateDisplay();
   },
 
-  renderFocusUI(task) {
-    const titleEl    = document.getElementById('focusTaskTitle');
-    const progressEl = document.getElementById('focusProgressBar');
-    const nextStepEl = document.getElementById('focusNextStep');
-    if (titleEl)    titleEl.textContent    = task.title;
-    if (nextStepEl) nextStepEl.textContent = task.nextStep || 'Focus on this task';
-    if (progressEl) {
-      const fill = progressEl.querySelector('.progress-fill');
-      if (fill) fill.style.width = (task.progressPercent || 0) + '%';
-    }
-    // Fix 8: wire up abandon button
-    const abandonBtn = document.getElementById('focusAbandonBtn');
-    if (abandonBtn) {
-      abandonBtn.onclick = () => {
-        AppShell.confirm('Abandon this session? Your time will still be logged.', () => this.end());
-      };
-    }
-    this.updateTimerDisplay();
+  async _populateTasks() {
+    await AppState.init();
+    const tasks  = (AppState.get('tasks') || []).filter(t => !t.isCompleted);
+    const select = this._els.select;
+    if (!select) return;
+    // Clear existing options except the placeholder
+    while (select.options.length > 1) select.remove(1);
+    tasks.forEach(t => {
+      const opt = document.createElement('option');
+      opt.value = t.id;
+      opt.textContent = t.title;
+      select.appendChild(opt);
+    });
+    // Auto-select task from URL ?task=id
+    const urlTask = new URLSearchParams(location.search).get('task');
+    if (urlTask) select.value = urlTask;
   },
 
-  startTimer() {
-    this.timerId = setInterval(() => { this.elapsedSeconds++; this.updateTimerDisplay(); }, 1000);
-  },
+  _bindEvents() {
+    this._els.startBtn?.addEventListener('click', () => this.start());
+    this._els.pauseBtn?.addEventListener('click', () => this.togglePause());
+    this._els.resetBtn?.addEventListener('click', () => this.reset());
 
-  updateTimerDisplay() {
-    const timerEl = document.getElementById('focusTimer');
-    if (!timerEl) return;
-    const remaining = Math.max(0, this.plannedMinutes * 60 - this.elapsedSeconds);
-    const mins = Math.floor(remaining / 60);
-    const secs = remaining % 60;
-    timerEl.textContent = `${String(mins).padStart(2,'0')}:${String(secs).padStart(2,'0')}`;
-  },
-
-  pause()  { if (this.timerId) { clearInterval(this.timerId); this.timerId = null; } },
-  resume() { if (this.active && !this.timerId) this.startTimer(); },
-
-  async end() {
-    this.pause();
-    this.active = false;
-    const overlay = document.getElementById('focusOverlay');
-    if (overlay) overlay.classList.remove('active');
-    const task = AppState.get('tasks').find(t => t.id === this.currentTaskId);
-    if (!task) return;
-    this.showProgressPrompt(task, Math.ceil(this.elapsedSeconds / 60));
-  },
-
-  showProgressPrompt(task, actualMinutes) {
-    const modal = document.createElement('div');
-    modal.className = 'modal-overlay open';
-    const currentPct = task.progressPercent || 0;
-    modal.innerHTML = `
-      <div class="modal">
-        <div class="modal-header"><span class="panel-title">Session Complete</span></div>
-        <div class="modal-body">
-          <p style="margin-bottom:1rem;font-weight:600">${Utils.escapeHtml(task.title)}</p>
-          <p style="margin-bottom:1.5rem;color:var(--color-text-muted)">You worked for <strong>${actualMinutes} min</strong>. How much of this task is now complete?</p>
-          <div class="form-group">
-            <label>Progress (${currentPct}% &rarr; ?%)</label>
-            <input type="range" id="progressSlider"
-                   min="${currentPct}" max="100" value="${currentPct}"
-                   style="width:100%">
-            <div style="text-align:center;margin-top:.5rem;color:var(--color-accent-cyan)" id="progressValue">${currentPct}%</div>
-          </div>
-          <div class="form-group">
-            <label>Next step (optional)</label>
-            <input type="text" id="nextStepInput" value="${Utils.escapeHtml(task.nextStep || '')}" placeholder="What's left to do?">
-          </div>
-        </div>
-        <div class="modal-footer">
-          <!-- Fix 4: skip still logs the session, rename for clarity -->
-          <button class="btn btn-ghost" id="skipProgress">Skip Progress Update</button>
-          <button class="btn btn-primary" id="saveProgress">Save Progress</button>
-        </div>
-      </div>`;
-    document.body.appendChild(modal);
-
-    const slider  = modal.querySelector('#progressSlider');
-    const display = modal.querySelector('#progressValue');
-    slider.addEventListener('input', () => { display.textContent = slider.value + '%'; });
-
-    const saveSession = async (pct, nextStep) => {
-      // Fix 10: clamp delta ≥ 0
-      const progressDelta = Math.max(0, pct - currentPct);
-      const isCompleted   = pct >= 100;
-      const now           = new Date().toISOString();
-      await AppState.update('tasks', task.id, {
-        progressPercent: pct,
-        isCompleted,
-        // Fix 7: write completedAt only when crossing 100%
-        ...(isCompleted && !task.completedAt ? { completedAt: now } : {}),
-        nextStep,
-        remainingMinutes: Math.max(0, Math.ceil((task.estimatedMinutes || 30) * (1 - pct / 100)))
+    this._els.modeBtns.forEach(btn => {
+      btn.addEventListener('click', () => {
+        if (this.active) return;
+        this._els.modeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const val = btn.dataset.mode;
+        if (val === 'custom') {
+          const mins = parseInt(prompt('Enter minutes:'), 10);
+          if (mins > 0) { this.totalSeconds = mins * 60; }
+          else return;
+        } else {
+          this.totalSeconds = parseInt(val, 10) * 60;
+        }
+        this.elapsedSeconds = 0;
+        this._updateDisplay();
       });
-      // Fix 3: use AppState.add so in-memory cache stays current
+    });
+
+    // Post-session modal buttons
+    this._els.overlay?.querySelectorAll('[data-post]').forEach(btn => {
+      btn.addEventListener('click', () => this._handlePostSession(btn.dataset.post));
+    });
+
+    document.getElementById('wakeLockBtn')?.addEventListener('click', () => this._toggleWakeLock());
+  },
+
+  start() {
+    if (this.active) return;
+    this.currentTaskId = this._els.select?.value || null;
+    this.active  = true;
+    this.paused  = false;
+    if (this._els.startBtn) this._els.startBtn.disabled = true;
+    if (this._els.pauseBtn) this._els.pauseBtn.disabled = false;
+    this.timerId = setInterval(() => this._tick(), 1000);
+  },
+
+  togglePause() {
+    if (!this.active) return;
+    if (!this.paused) {
+      clearInterval(this.timerId); this.timerId = null;
+      this.paused = true;
+      if (this._els.pauseBtn) this._els.pauseBtn.textContent = 'Resume';
+    } else {
+      this.timerId = setInterval(() => this._tick(), 1000);
+      this.paused  = false;
+      if (this._els.pauseBtn) this._els.pauseBtn.textContent = 'Pause';
+    }
+  },
+
+  reset() {
+    clearInterval(this.timerId); this.timerId = null;
+    this.active  = false;
+    this.paused  = false;
+    this.elapsedSeconds = 0;
+    if (this._els.startBtn) { this._els.startBtn.disabled = false; }
+    if (this._els.pauseBtn) { this._els.pauseBtn.disabled = true; this._els.pauseBtn.textContent = 'Pause'; }
+    this._updateDisplay();
+  },
+
+  _tick() {
+    this.elapsedSeconds++;
+    this._updateDisplay();
+    if (this.elapsedSeconds >= this.totalSeconds) {
+      clearInterval(this.timerId); this.timerId = null;
+      this.active = false;
+      if (this._els.startBtn) this._els.startBtn.disabled = false;
+      if (this._els.pauseBtn) { this._els.pauseBtn.disabled = true; this._els.pauseBtn.textContent = 'Pause'; }
+      this._showPostModal();
+    }
+  },
+
+  _updateDisplay() {
+    const remaining = Math.max(0, this.totalSeconds - this.elapsedSeconds);
+    const m = Math.floor(remaining / 60);
+    const s = remaining % 60;
+    if (this._els.display)
+      this._els.display.textContent = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
+    // Progress fill shrinks as time runs (starts full, empties)
+    const pct = this.totalSeconds > 0 ? (remaining / this.totalSeconds) * 100 : 0;
+    if (this._els.fill) this._els.fill.style.width = pct + '%';
+  },
+
+  _showPostModal() {
+    if (this._els.overlay) this._els.overlay.style.display = 'flex';
+  },
+
+  async _handlePostSession(action) {
+    if (this._els.overlay) this._els.overlay.style.display = 'none';
+    const taskId = this.currentTaskId;
+    const actualMinutes = Math.ceil(this.elapsedSeconds / 60) || 1;
+    const now = new Date().toISOString();
+
+    if (taskId) {
+      const task = (AppState.get('tasks') || []).find(t => t.id === taskId);
+      if (task) {
+        const isCompleted   = action === 'done';
+        const progressDelta = isCompleted ? Math.max(0, 100 - (task.progressPercent || 0)) : 0;
+        await AppState.update('tasks', taskId, {
+          isCompleted,
+          progressPercent: isCompleted ? 100 : task.progressPercent,
+          ...(isCompleted && !task.completedAt ? { completedAt: now } : {}),
+          remainingMinutes: isCompleted ? 0 : Math.max(0,
+            (task.remainingMinutes || task.estimatedMinutes || 0) - actualMinutes)
+        });
+        await AppState.add('focusSessions', {
+          id: Utils.uid('session'),
+          taskId,
+          taskTitle: task.title,
+          startTime: new Date(Date.now() - actualMinutes * 60000).toISOString(),
+          endTime: now,
+          plannedMinutes: Math.round(this.totalSeconds / 60),
+          actualMinutes,
+          progressDelta
+        });
+      }
+    } else {
+      // No task selected — still log a bare session
       await AppState.add('focusSessions', {
         id: Utils.uid('session'),
-        taskId: task.id,
-        taskTitle: task.title,
-        startTime: new Date(Date.now() - this.elapsedSeconds * 1000).toISOString(),
+        taskId: null, taskTitle: 'Untracked session',
+        startTime: new Date(Date.now() - actualMinutes * 60000).toISOString(),
         endTime: now,
-        plannedMinutes: this.plannedMinutes,
-        actualMinutes,
-        progressDelta
+        plannedMinutes: Math.round(this.totalSeconds / 60),
+        actualMinutes, progressDelta: 0
       });
-    };
+    }
 
-    modal.querySelector('#saveProgress').addEventListener('click', async () => {
-      const pct     = parseInt(slider.value);
-      const nextStep = modal.querySelector('#nextStepInput').value.trim();
-      await saveSession(pct, nextStep);
-      AppShell.toast('Progress saved!', 'success');
-      modal.remove();
-    });
+    AppShell.toast(action === 'done' ? 'Task marked done!' : 'Progress saved!', 'success');
+    this.elapsedSeconds = 0;
+    this._updateDisplay();
+  },
 
-    // Fix 4: skip still saves a session with delta=0 and current pct unchanged
-    modal.querySelector('#skipProgress').addEventListener('click', async () => {
-      await saveSession(currentPct, task.nextStep || '');
-      modal.remove();
-    });
-
-    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+  async _toggleWakeLock() {
+    const btn    = document.getElementById('wakeLockBtn');
+    const status = document.getElementById('wakeLockStatus');
+    if (this._wakeLock) {
+      await this._wakeLock.release();
+      this._wakeLock = null;
+      if (btn)    btn.textContent    = 'Keep Screen On';
+      if (status) status.textContent = '';
+    } else {
+      try {
+        this._wakeLock = await navigator.wakeLock.request('screen');
+        if (btn)    btn.textContent    = 'Screen Lock: ON';
+        if (status) status.textContent = '\uD83D\uDD12 Active';
+      } catch { AppShell.toast('Wake lock unavailable', 'warning'); }
+    }
   }
 };
+
+document.addEventListener('DOMContentLoaded', () => FocusMode.init());

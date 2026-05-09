@@ -2,13 +2,10 @@
 // ChronoFlow State Manager — In-memory cache + event bus
 // =========================================================
 
-// ---- Default registered AI jobs (seeded on first run) ------------------
 const DEFAULT_AI_JOBS = [
   {
-    id: 'goal-decomposition',
-    jobId: 'goal-decomposition',
-    label: 'Goal Decomposition',
-    trigger: 'planner-sidebar',
+    id: 'goal-decomposition', jobId: 'goal-decomposition',
+    label: 'Goal Decomposition', trigger: 'planner-sidebar',
     systemPrompt: [
       'You are ChronoFlow\'s Goal Decomposition assistant.',
       'Your task: given a user\'s stated goal and their existing task list, break the goal into',
@@ -21,16 +18,12 @@ const DEFAULT_AI_JOBS = [
     userMessageTemplate: 'My goal: {goal}\n\nExisting tasks:\n{tasks}',
     inputSources: ['tasks', 'goals', 'settings'],
     outputSchema: { type: 'data', store: 'tasks', items: [] },
-    acceptRejectPerItem: true,
-    lockedFiles: [],
-    addedBy: 'system',
+    acceptRejectPerItem: true, lockedFiles: [], addedBy: 'system',
     addedAt: new Date().toISOString()
   },
   {
-    id: 'task-critique',
-    jobId: 'task-critique',
-    label: 'Task Critique',
-    trigger: 'planner-sidebar',
+    id: 'task-critique', jobId: 'task-critique',
+    label: 'Task Critique', trigger: 'planner-sidebar',
     systemPrompt: [
       'You are ChronoFlow\'s Task Critique assistant.',
       'Review the user\'s task list. For each vague, oversized, or unclear task suggest:',
@@ -44,16 +37,12 @@ const DEFAULT_AI_JOBS = [
     userMessageTemplate: 'My tasks:\n{tasks}',
     inputSources: ['tasks', 'settings'],
     outputSchema: { type: 'data', store: 'tasks', items: [] },
-    acceptRejectPerItem: true,
-    lockedFiles: [],
-    addedBy: 'system',
+    acceptRejectPerItem: true, lockedFiles: [], addedBy: 'system',
     addedAt: new Date().toISOString()
   },
   {
-    id: 'daily-email',
-    jobId: 'daily-email',
-    label: 'Daily Email Summary',
-    trigger: 'home',
+    id: 'daily-email', jobId: 'daily-email',
+    label: 'Daily Email Summary', trigger: 'home',
     systemPrompt: [
       'You are ChronoFlow\'s Daily Email assistant.',
       'Write a concise, friendly end-of-day email (plain text, max 300 words) covering:',
@@ -66,16 +55,12 @@ const DEFAULT_AI_JOBS = [
     userMessageTemplate: 'Schedule: {scheduleBlocks}\nSessions: {focusSessions}\nTasks: {tasks}',
     inputSources: ['tasks', 'scheduleBlocks', 'focusSessions', 'settings'],
     outputSchema: { type: 'email', subject: '', body: '' },
-    acceptRejectPerItem: false,
-    lockedFiles: [],
-    addedBy: 'system',
+    acceptRejectPerItem: false, lockedFiles: [], addedBy: 'system',
     addedAt: new Date().toISOString()
   },
   {
-    id: 'backlog-cleanup',
-    jobId: 'backlog-cleanup',
-    label: 'Backlog Cleanup',
-    trigger: 'planner-sidebar',
+    id: 'backlog-cleanup', jobId: 'backlog-cleanup',
+    label: 'Backlog Cleanup', trigger: 'planner-sidebar',
     systemPrompt: [
       'You are ChronoFlow\'s Backlog Cleanup assistant.',
       'Analyse the task list and identify:',
@@ -89,16 +74,12 @@ const DEFAULT_AI_JOBS = [
     userMessageTemplate: 'My backlog (all tasks):\n{tasks}\nToday: {today}',
     inputSources: ['tasks', 'subtasks', 'settings'],
     outputSchema: { type: 'data', store: 'tasks', items: [] },
-    acceptRejectPerItem: true,
-    lockedFiles: [],
-    addedBy: 'system',
+    acceptRejectPerItem: true, lockedFiles: [], addedBy: 'system',
     addedAt: new Date().toISOString()
   },
   {
-    id: 'weekly-review',
-    jobId: 'weekly-review',
-    label: 'Weekly Review',
-    trigger: 'stats',
+    id: 'weekly-review', jobId: 'weekly-review',
+    label: 'Weekly Review', trigger: 'stats',
     systemPrompt: [
       'You are ChronoFlow\'s Weekly Review assistant.',
       'Analyse the last 7 days of focus sessions, schedule blocks, and completed tasks.',
@@ -113,14 +94,11 @@ const DEFAULT_AI_JOBS = [
     userMessageTemplate: 'Sessions this week:\n{focusSessions}\nSchedule:\n{scheduleBlocks}\nTasks:\n{tasks}',
     inputSources: ['tasks', 'scheduleBlocks', 'focusSessions', 'settings'],
     outputSchema: { type: 'weekly-review', markdown: '' },
-    acceptRejectPerItem: false,
-    lockedFiles: [],
-    addedBy: 'system',
+    acceptRejectPerItem: false, lockedFiles: [], addedBy: 'system',
     addedAt: new Date().toISOString()
   }
 ];
 
-// ---- AppState ----------------------------------------------------------
 const AppState = {
   _data: {
     settings: {}, goals: [], tasks: [], subtasks: [],
@@ -130,9 +108,9 @@ const AppState = {
   _listeners: new Map(),
 
   async init() {
-    // Load array stores
+    // Fix 8: settings is a singleton — load separately, NOT as array
     const arrayStores = [
-      'settings', 'goals', 'tasks', 'subtasks',
+      'goals', 'tasks', 'subtasks',
       'slots', 'scheduleBlocks', 'focusSessions', 'registeredAiJobs'
     ];
     for (const s of arrayStores) {
@@ -141,8 +119,12 @@ const AppState = {
     }
 
     // Singleton stores
+    const sett = await DB.get('settings', 'main');
+    this._data.settings = sett || {};
+
     const g = await DB.get('gmailConfig', 'main');
     this._data.gmailConfig = g || {};
+
     const a = await DB.get('aiConfig', 'main');
     this._data.aiConfig = a || {};
 

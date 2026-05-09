@@ -3,7 +3,6 @@
 // Task CRUD, slot management, schedule rendering
 // =========================================================
 const Planner = {
-  // Fix 3: persist chosen sort order
   _sortOrder: localStorage.getItem('cf-task-sort') || 'priority',
 
   async init() {
@@ -21,26 +20,23 @@ const Planner = {
     await this.renderSchedule();
   },
 
-  // Fix 3: sort selector + Fix 5: completed tasks fade + sort to bottom
   async renderTasks() {
     const el = document.getElementById('taskList');
     if (!el) return;
     let tasks = [...(AppState.get('tasks') || [])];
     if (!tasks.length) { el.innerHTML = '<div class="empty-state">No tasks yet — add one below.</div>'; return; }
 
-    // Sort active tasks; completed always go to the bottom
     const active    = tasks.filter(t => !t.isCompleted);
     const completed = tasks.filter(t =>  t.isCompleted);
 
     const sortFn = {
-      priority:  (a, b) => (a.priority || 3) - (b.priority || 3),
-      deadline:  (a, b) => new Date(a.deadline || '9999') - new Date(b.deadline || '9999'),
-      progress:  (a, b) => (b.progressPercent || 0) - (a.progressPercent || 0),
-      created:   (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
+      priority: (a, b) => (a.priority || 3) - (b.priority || 3),
+      deadline: (a, b) => new Date(a.deadline || '9999') - new Date(b.deadline || '9999'),
+      progress: (a, b) => (b.progressPercent || 0) - (a.progressPercent || 0),
+      created:  (a, b) => new Date(b.createdAt) - new Date(a.createdAt),
     }[this._sortOrder] || ((a, b) => (a.priority || 3) - (b.priority || 3));
 
     active.sort(sortFn);
-
     const sorted = [...active, ...completed];
 
     el.innerHTML = `
@@ -72,7 +68,6 @@ const Planner = {
           </div>
         </div>`).join('');
 
-    // Wire sort selector
     el.querySelector('#taskSortSelect')?.addEventListener('change', e => {
       this._sortOrder = e.target.value;
       localStorage.setItem('cf-task-sort', this._sortOrder);
@@ -81,7 +76,8 @@ const Planner = {
   },
 
   async renderSlots() {
-    const el = document.getElementById('slotsList');
+    // Fix 5: correct ID is 'slotList' (no trailing s) per planner.html
+    const el = document.getElementById('slotList');
     if (!el) return;
     const slots = (AppState.get('slots') || []).sort((a,b) => new Date(a.start) - new Date(b.start));
     if (!slots.length) { el.innerHTML = '<div class="empty-state">No time slots added yet.</div>'; return; }
@@ -124,17 +120,21 @@ const Planner = {
       if (editId)   this.openTaskModal(editId);
       if (deleteId) AppShell.confirm('Delete this task?', () => AppState.remove('tasks', deleteId));
     });
-    document.getElementById('slotsList')?.addEventListener('click', async e => {
+
+    // Fix 5: correct ID 'slotList'
+    document.getElementById('slotList')?.addEventListener('click', async e => {
       const deleteId = e.target.closest('[data-deleteSlot]')?.dataset.deleteslot;
       if (deleteId) AppShell.confirm('Remove this time slot?', () => AppState.remove('slots', deleteId));
     });
+
     document.getElementById('addTaskBtn')?.addEventListener('click',  () => this.openTaskModal());
     document.getElementById('addSlotBtn')?.addEventListener('click',  () => this.openSlotModal());
-    document.getElementById('buildScheduleBtn')?.addEventListener('click', () => this.renderSchedule());
+    // Fix 6: correct ID 'generateBtn'
+    document.getElementById('generateBtn')?.addEventListener('click', () => this.renderSchedule());
   },
 
   openTaskModal(editId = null) {
-    const task = editId ? AppState.get('tasks').find(t => t.id === editId) : null;
+    const task = editId ? (AppState.get('tasks') || []).find(t => t.id === editId) : null;
     const modal = document.createElement('div');
     modal.className = 'modal-overlay open';
     modal.innerHTML = `
@@ -169,16 +169,20 @@ const Planner = {
     modal.querySelector('#tSave').addEventListener('click', async () => {
       const title = modal.querySelector('#tTitle').value.trim();
       if (!title) { AppShell.toast('Title is required', 'error'); return; }
+      const newDuration = parseInt(modal.querySelector('#tDuration').value) || 30;
       const data = {
         title,
-        estimatedMinutes: parseInt(modal.querySelector('#tDuration').value) || 30,
-        remainingMinutes: parseInt(modal.querySelector('#tDuration').value) || 30,
+        estimatedMinutes: newDuration,
+        // Fix 7: preserve remainingMinutes progress on edit
+        remainingMinutes: task
+          ? Math.min(task.remainingMinutes ?? newDuration, newDuration)
+          : newDuration,
         priority: parseInt(modal.querySelector('#tPriority').value) || 3,
         energyNeed: parseInt(modal.querySelector('#tEnergy').value) || 3,
         deadline: modal.querySelector('#tDeadline').value || null,
         context: modal.querySelector('#tContext').value,
         nextStep: modal.querySelector('#tNotes').value.trim(),
-        isCompleted: false,
+        isCompleted: task?.isCompleted || false,
         progressPercent: task?.progressPercent || 0
       };
       if (task) { await AppState.update('tasks', task.id, data); AppShell.toast('Task updated', 'success'); }
