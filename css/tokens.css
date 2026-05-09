@@ -6,6 +6,13 @@
   --font-body: 'Inter', system-ui, sans-serif;
   --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
 
+  /* Font weights */
+  --font-weight-normal:    400;
+  --font-weight-medium:    500;
+  --font-weight-semibold:  600;
+  --font-weight-bold:      700;
+
+  /* Type scale */
   --text-xs:   clamp(0.72rem,  0.68rem + 0.2vw,  0.8rem);
   --text-sm:   clamp(0.82rem,  0.76rem + 0.3vw,  0.9375rem);
   --text-base: clamp(0.9375rem,0.88rem + 0.25vw, 1.0625rem);
@@ -14,6 +21,15 @@
   --text-2xl:  clamp(1.75rem,  1.1rem + 2vw,    2.75rem);
   --text-hero: clamp(3rem,     2rem   + 6vw,    8rem);
 
+  /* Semantic spacing (named aliases used by components) */
+  --space-xs:  0.25rem;   /* 4px  */
+  --space-sm:  0.5rem;    /* 8px  */
+  --space-md:  1rem;      /* 16px */
+  --space-lg:  1.5rem;    /* 24px */
+  --space-xl:  2rem;      /* 32px */
+  --space-2xl: 3rem;      /* 48px */
+
+  /* Numeric spacing scale (kept for back-compat) */
   --space-1:  0.25rem;
   --space-2:  0.5rem;
   --space-3:  0.75rem;
@@ -26,25 +42,30 @@
   --space-16: 4rem;
   --space-20: 5rem;
 
+  /* Radii */
   --radius-sm:   0.375rem;
   --radius-md:   0.625rem;
   --radius-lg:   1rem;
   --radius-xl:   1.5rem;
   --radius-full: 999px;
 
+  /* Transitions */
   --transition-fast:   120ms cubic-bezier(0.16,1,0.3,1);
   --transition-base:   200ms cubic-bezier(0.16,1,0.3,1);
   --transition-slow:   350ms cubic-bezier(0.16,1,0.3,1);
   --transition-spring: 400ms cubic-bezier(0.34,1.56,0.64,1);
 
+  /* Colours — dark theme (default) */
   --color-bg:             #070a12;
   --color-bg-elevated:    #0d1120;
+  --color-bg-card:        #111827;   /* MEDIUM-1: card surface, slightly lighter than elevated */
   --color-surface:        #11162a;
   --color-surface-2:      #171d38;
   --color-surface-3:      #1e2548;
   --color-surface-glass:  rgba(17,22,42,0.72);
   --color-border:         rgba(140,166,255,0.14);
   --color-border-hover:   rgba(140,166,255,0.26);
+  --color-border-strong:  rgba(140,166,255,0.38);  /* MEDIUM-1: stronger border for hover/active states */
   --color-divider:        rgba(140,166,255,0.08);
   --color-text:           #eef1ff;
   --color-text-muted:     #a8b0d4;
@@ -71,15 +92,18 @@
   --content-max:   1200px;
   --sidebar-width: 300px;
 }
+
 [data-theme="light"] {
   --color-bg:            #f0f1f5;
   --color-bg-elevated:   #e6e8ef;
+  --color-bg-card:       #ffffff;   /* MEDIUM-1: white card surface in light mode */
   --color-surface:       #ffffff;
   --color-surface-2:     #f5f6fa;
   --color-surface-3:     #eaecf2;
   --color-surface-glass: rgba(255,255,255,0.72);
   --color-border:        rgba(60,70,120,0.12);
   --color-border-hover:  rgba(60,70,120,0.22);
+  --color-border-strong: rgba(60,70,120,0.36);  /* MEDIUM-1: light-mode strong border */
   --color-divider:       rgba(60,70,120,0.06);
   --color-text:          #1a1d2e;
   --color-text-muted:    #5a6080;

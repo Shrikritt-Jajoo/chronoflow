@@ -4,17 +4,28 @@
 // =========================================================
 const Planner = {
   _sortOrder: localStorage.getItem('cf-task-sort') || 'priority',
+  // LOW-3 fix: store unsubscribe functions so we can clean up on re-init.
+  _unsubs: [],
+
+  // LOW-3 fix: destroy existing listeners before re-binding to prevent
+  // stacked duplicate renders if init() is ever called more than once.
+  destroy() {
+    for (const unsub of this._unsubs) unsub();
+    this._unsubs = [];
+  },
 
   async init() {
+    this.destroy();
     await AppState.init();
     this.render();
     this.bindEvents();
-    AppState.on('tasks',          () => this.render());
-    AppState.on('slots',          () => this.render());
-    AppState.on('scheduleBlocks', () => this.render());
+    this._unsubs = [
+      AppState.on('tasks',          () => this.render()),
+      AppState.on('slots',          () => this.render()),
+      AppState.on('scheduleBlocks', () => this.render()),
+    ];
   },
 
-  // MEDIUM-6 fix: await each render sequentially to prevent interleaved parallel renders.
   async render() {
     await this.renderTasks();
     await this.renderSlots();
@@ -95,7 +106,6 @@ const Planner = {
   async renderSchedule() {
     const el = document.getElementById('scheduleList');
     if (!el) return;
-    // HIGH-1 fix: buildScheduleSync doesn't exist — always use async buildSchedule().
     const blocks = await Scheduler.buildSchedule();
     if (!blocks || !blocks.length) { el.innerHTML = '<div class="empty-state">Add tasks and time slots to generate a schedule.</div>'; return; }
     el.innerHTML = blocks.map(block => `
@@ -119,7 +129,6 @@ const Planner = {
     });
 
     document.getElementById('slotList')?.addEventListener('click', async e => {
-      // HIGH-2 fix: dataset.deleteSlot (camelCase) — browser normalises data-deleteSlot attribute.
       const deleteId = e.target.closest('[data-deleteSlot]')?.dataset.deleteSlot;
       if (deleteId) AppShell.confirm('Remove this time slot?', () => AppState.remove('slots', deleteId));
     });

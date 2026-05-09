@@ -1,6 +1,6 @@
 // =========================================================
 // ChronoFlow Stats Page
-// KPI cards, weekly focus chart, Energy Insight (Phase 9)
+// KPI cards, weekly focus chart, Energy Insight
 // =========================================================
 
 const ENERGY_BUCKETS = [
@@ -11,6 +11,9 @@ const ENERGY_BUCKETS = [
   { label: '6–9 PM',   start: 18, end: 21 },
   { label: '9 PM+',    start: 21, end: 27 },
 ];
+
+// MEDIUM-4: minimum sessions a bucket must have to qualify as the peak.
+const MIN_PEAK_SESSIONS = 3;
 
 const Stats = {
 
@@ -28,7 +31,6 @@ const Stats = {
     const tasks    = AppState.get('tasks') || [];
     const sessions = AppState.get('focusSessions') || [];
 
-    // Fix 7: use completedAt instead of updatedAt
     const tasksDone = tasks.filter(t =>
       t.isCompleted && t.completedAt && t.completedAt.startsWith(today)
     ).length;
@@ -49,7 +51,6 @@ const Stats = {
     _set('statCompletion', rate + '%');
   },
 
-  // Fix 6: streak — don't penalise if no session yet today
   _calcStreak(sessions) {
     if (!sessions.length) return 0;
     const days = new Set(
@@ -58,16 +59,11 @@ const Stats = {
     const today = new Date().toISOString().split('T')[0];
     let streak = 0;
     let d = new Date();
-    // If today has no session yet, start counting from yesterday
     if (!days.has(today)) d.setDate(d.getDate() - 1);
     while (true) {
       const key = d.toISOString().split('T')[0];
-      if (days.has(key)) {
-        streak++;
-        d.setDate(d.getDate() - 1);
-      } else {
-        break;
-      }
+      if (days.has(key)) { streak++; d.setDate(d.getDate() - 1); }
+      else break;
     }
     return streak;
   },
@@ -105,7 +101,7 @@ const Stats = {
     }).join('');
   },
 
-  // ---- Energy Insight (Phase 9) ----------------------------------------
+  // ---- Energy Insight --------------------------------------------------
   renderEnergyInsight() {
     const sessions = AppState.get('focusSessions') || [];
     const chartEl  = document.getElementById('energyChart');
@@ -138,11 +134,27 @@ const Stats = {
       return;
     }
 
-    const peakIdx   = averages.indexOf(Math.max(...averages));
+    if (hintEl) hintEl.textContent = `based on ${totalSessions} session${totalSessions !== 1 ? 's' : ''}`;
+
+    // MEDIUM-4 fix: only consider buckets that meet the minimum session
+    // threshold as peak candidates. If none qualify, fall back to the
+    // bucket with the most sessions (most data = most reliable).
+    const qualified = bucketData
+      .map((b, i) => ({ i, count: b.count, avg: averages[i] }))
+      .filter(b => b.count >= MIN_PEAK_SESSIONS);
+
+    let peakIdx;
+    if (qualified.length > 0) {
+      peakIdx = qualified.reduce((best, b) => b.avg > best.avg ? b : best).i;
+    } else {
+      // Fallback: bucket with the most sessions (most reliable signal)
+      peakIdx = bucketData.reduce((bestIdx, b, i) =>
+        b.count > bucketData[bestIdx].count ? i : bestIdx, 0);
+    }
+
     const peakLabel = ENERGY_BUCKETS[peakIdx].label;
     const peakAvg   = averages[peakIdx];
     const maxAvg    = Math.max(...averages, 1);
-    if (hintEl) hintEl.textContent = `based on ${totalSessions} session${totalSessions !== 1 ? 's' : ''}`;
 
     chartEl.innerHTML = ENERGY_BUCKETS.map((bucket, i) => {
       const avg    = averages[i];
@@ -163,12 +175,16 @@ const Stats = {
         </div>`;
     }).join('');
 
+    const qualifiedNote = qualified.length === 0
+      ? ' (still building data — need ' + MIN_PEAK_SESSIONS + '+ sessions per window for full analysis)'
+      : '';
     const adjective = peakAvg >= 60 ? 'excellent' :
                       peakAvg >= 40 ? 'strong' :
                       peakAvg >= 20 ? 'moderate' : 'low';
     sentEl.textContent =
       `⚡ Your peak performance window is ${peakLabel} — ` +
-      `you make ${adjective} progress during this time (avg ${peakAvg}% per session). ` +
+      `you make ${adjective} progress during this time (avg ${peakAvg}% per session).` +
+      qualifiedNote + ' ' +
       _peakTip(peakIdx);
   },
 
@@ -211,7 +227,7 @@ function _peakTip(idx) {
     'Post-lunch can work for you — avoid meetings in this window.',
     'Your mid-afternoon window is productive — protect it from distractions.',
     'Evening sessions suit you — wind down after 9 PM to protect sleep.',
-    'You're a night owl — protect your sleep buffer after intense late sessions.',
+    'You’re a night owl — protect your sleep buffer after intense late sessions.',
   ];
   return tips[idx] ?? '';
 }

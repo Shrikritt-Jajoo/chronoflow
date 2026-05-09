@@ -32,11 +32,16 @@ const GmailConnector = {
     });
   },
 
+  // HIGH-5 fix: read existing record first and spread it so clientId
+  // (and any other fields) are preserved when writing back tokens.
   async saveToken(tokenResponse) {
-    const config = await DB.get('gmailConfig', 'main') || { key: 'main' };
-    config.accessToken = tokenResponse.access_token;
-    config.expiresAt   = Date.now() + tokenResponse.expires_in * 1000;
-    await DB.put('gmailConfig', config);
+    const existing = await DB.get('gmailConfig', 'main') || { key: 'main' };
+    await DB.put('gmailConfig', {
+      ...existing,
+      key: 'main',
+      accessToken: tokenResponse.access_token,
+      expiresAt:   Date.now() + tokenResponse.expires_in * 1000
+    });
   },
 
   async getValidToken() {
