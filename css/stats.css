@@ -1,0 +1,33 @@
+/* =========================================================
+   ChronoFlow Stats Page
+   ========================================================= */
+.stats-body { padding-top: var(--nav-height); min-height: 100vh; position: relative; overflow-y: auto; }
+.stats-shell { position: relative; z-index: 10; max-width: var(--content-max); margin: 0 auto; padding: var(--space-8) var(--space-6); }
+.stats-grid { display: grid; grid-template-columns: repeat(4,1fr); gap: var(--space-5); }
+.stat-card {
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-panel); padding: var(--space-6);
+  display: flex; flex-direction: column; align-items: center; gap: var(--space-2);
+  text-align: center; transition: all var(--transition-fast);
+}
+.stat-card:hover { border-color: var(--color-border-hover); box-shadow: var(--glow-blue); }
+.stat-value { font-family: var(--font-display); font-size: var(--text-2xl); font-weight: 700; color: var(--color-accent-cyan); text-shadow: var(--glow-cyan); }
+.stat-label { font-size: var(--text-xs); color: var(--color-text-faint); text-transform: uppercase; letter-spacing: 0.08em; }
+.weekly-chart { display: flex; align-items: flex-end; gap: var(--space-3); height: 160px; padding: var(--space-4) 0; }
+.week-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: var(--space-2); height: 100%; justify-content: flex-end; }
+.week-bar { width: 100%; background: linear-gradient(180deg, var(--color-accent-cyan), var(--color-accent-blue)); border-radius: var(--radius-sm) var(--radius-sm) 0 0; box-shadow: var(--glow-cyan); min-height: 4px; transition: height var(--transition-slow); }
+.week-bar-label { font-size: var(--text-xs); color: var(--color-text-faint); text-transform: uppercase; letter-spacing: 0.06em; }
+.session-item {
+  background: var(--color-surface-2);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  border: 1px solid var(--color-border); border-radius: var(--radius-lg);
+  padding: var(--space-4); margin-bottom: var(--space-3);
+  display: flex; justify-content: space-between; align-items: center; gap: var(--space-4);
+}
+.session-title    { font-size: var(--text-sm); font-weight: 600; color: var(--color-text); }
+.session-meta     { font-size: var(--text-xs); color: var(--color-text-faint); margin-top: var(--space-1); }
+.session-duration { font-family: var(--font-display); font-size: var(--text-lg); color: var(--color-accent-cyan); font-weight: 700; flex-shrink: 0; }
+@media (max-width: 900px) { .stats-grid { grid-template-columns: repeat(2,1fr); } }
+@media (max-width: 540px) { .stats-grid { grid-template-columns: 1fr; } }

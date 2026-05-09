@@ -1,0 +1,62 @@
+/* =========================================================
+   ChronoFlow Settings Page
+   ========================================================= */
+/* FIX: was not scrollable — overflow-y: auto added */
+.settings-body {
+  padding-top: var(--nav-height);
+  min-height: 100vh;
+  overflow-y: auto;
+  position: relative;
+}
+.settings-shell {
+  position: relative; z-index: 10;
+  max-width: var(--content-max); margin: 0 auto;
+  padding: var(--space-8) var(--space-6);
+  min-height: calc(100vh - var(--nav-height));
+}
+.settings-grid {
+  display: grid; grid-template-columns: 240px 1fr;
+  gap: var(--space-6); align-items: start;
+}
+/* Glass sticky sidebar */
+.settings-nav {
+  position: sticky; top: calc(var(--nav-height) + var(--space-4));
+  display: flex; flex-direction: column; gap: var(--space-1);
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border); border-radius: var(--radius-xl);
+  padding: var(--space-3);
+}
+.settings-nav-item {
+  min-height: 44px; padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md); font-size: var(--text-sm);
+  font-weight: 500; color: var(--color-text-muted);
+  text-align: left; transition: all var(--transition-fast);
+  border: 1px solid transparent; cursor: pointer; background: none;
+}
+.settings-nav-item:hover { background: var(--color-surface-2); color: var(--color-text); }
+.settings-nav-item.active { background: var(--color-accent-blue-dim); color: var(--color-accent-blue); border-color: rgba(140,166,255,0.2); }
+.settings-content { display: flex; flex-direction: column; gap: var(--space-6); }
+/* Glass panels for settings sections */
+.settings-section {
+  background: var(--color-surface-glass);
+  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
+  border: 1px solid var(--color-border); border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-panel); overflow: hidden;
+}
+.settings-section-header { padding: var(--space-5) var(--space-6); border-bottom: 1px solid var(--color-divider); }
+.settings-section-body   { padding: var(--space-5) var(--space-6); }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; padding: var(--space-3) 0; border-bottom: 1px solid var(--color-divider); }
+.toggle-row:last-child { border-bottom: none; }
+.toggle-label { font-size: var(--text-sm); color: var(--color-text); }
+.toggle-hint  { font-size: var(--text-xs); color: var(--color-text-faint); margin-top: 2px; }
+.seg-control { display: flex; background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-full); padding: 3px; gap: 3px; }
+.seg-btn { flex: 1; min-height: 34px; border-radius: var(--radius-full); font-size: var(--text-xs); font-weight: 600; color: var(--color-text-muted); transition: all var(--transition-fast); border: none; cursor: pointer; background: none; padding: 0 var(--space-3); }
+.seg-btn.active { background: var(--color-accent-cyan); color: var(--color-bg); box-shadow: var(--glow-cyan); }
+.swatch-row { display: flex; gap: var(--space-3); flex-wrap: wrap; margin-top: var(--space-3); }
+.swatch { width: 32px; height: 32px; border-radius: var(--radius-full); cursor: pointer; border: 2px solid transparent; transition: all var(--transition-fast); }
+.swatch.active { border-color: var(--color-text); box-shadow: 0 0 0 2px var(--color-bg); }
+@media (max-width: 900px) {
+  .settings-grid { grid-template-columns: 1fr; }
+  .settings-nav  { position: static; flex-direction: row; overflow-x: auto; flex-wrap: nowrap; }
+}
