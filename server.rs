@@ -1,17 +1,16 @@
 //! ChronoFlow — static file server
-//! stdlib only, no external crates.
+//! stdlib only, no external crates, single-threaded (desktop single-user).
 //!
-//! Build:  rustc server.rs -o server
+//! Build:  rustc server.rs -o server        (macOS / Linux)
+//!         rustc server.rs -o server.exe    (Windows)
 //! Run:    ./server          (default port 3000)
 //!         ./server 8080     (custom port)
 //! Then open: http://localhost:3000
 
-use std::collections::HashMap;
 use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::net::{TcpListener, TcpStream};
-use std::path::{Component, Path, PathBuf};
-use std::thread;
+use std::path::{Path, PathBuf};
 
 // ---------------------------------------------------------------------------
 // MIME types
@@ -35,7 +34,7 @@ fn mime(ext: &str) -> &'static str {
 }
 
 // ---------------------------------------------------------------------------
-// Parse the request line
+// Parse the first line of an HTTP request → URL path
 // ---------------------------------------------------------------------------
 fn parse_request(stream: &TcpStream) -> Option<String> {
     let mut reader = BufReader::new(stream);
@@ -43,39 +42,35 @@ fn parse_request(stream: &TcpStream) -> Option<String> {
     reader.read_line(&mut first_line).ok()?;
     // "GET /path HTTP/1.1"
     let mut parts = first_line.split_whitespace();
-    parts.next(); // method
+    parts.next();                      // skip method
     let path = parts.next()?.to_owned();
     Some(path)
 }
 
 // ---------------------------------------------------------------------------
-// Resolve a URL path to a safe filesystem path under `root`
-// Blocks path traversal (../../etc)
+// Resolve URL path → safe filesystem path (blocks path traversal)
 // ---------------------------------------------------------------------------
 fn resolve_path(root: &Path, url_path: &str) -> Option<PathBuf> {
     // strip query string
     let url_path = url_path.split('?').next().unwrap_or("/");
 
-    // decode %XX sequences
     let decoded = percent_decode(url_path);
-
     let rel = decoded.trim_start_matches('/');
 
-    // build candidate
     let candidate = if rel.is_empty() {
         root.join("index.html")
     } else {
         root.join(rel)
     };
 
-    // canonicalize to prevent traversal
-    let canonical = candidate.canonicalize().ok()?;
-    let root_canon = root.canonicalize().ok()?;
+    // canonicalize prevents ../../ traversal
+    let canonical   = candidate.canonicalize().ok()?;
+    let root_canon  = root.canonicalize().ok()?;
     if !canonical.starts_with(&root_canon) {
-        return None; // traversal attempt
+        return None;
     }
 
-    // if directory, serve index.html inside it
+    // directory → serve its index.html
     if canonical.is_dir() {
         let index = canonical.join("index.html");
         if index.exists() { Some(index) } else { None }
@@ -85,7 +80,7 @@ fn resolve_path(root: &Path, url_path: &str) -> Option<PathBuf> {
 }
 
 // ---------------------------------------------------------------------------
-// Minimal percent-decoder
+// Minimal %XX decoder
 // ---------------------------------------------------------------------------
 fn percent_decode(s: &str) -> String {
     let mut out = String::with_capacity(s.len());
@@ -93,7 +88,7 @@ fn percent_decode(s: &str) -> String {
     let mut i = 0;
     while i < bytes.len() {
         if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (hex_val(bytes[i+1]), hex_val(bytes[i+2])) {
+            if let (Some(h), Some(l)) = (hex_val(bytes[i + 1]), hex_val(bytes[i + 2])) {
                 out.push(char::from(h << 4 | l));
                 i += 3;
                 continue;
@@ -134,7 +129,8 @@ fn respond(mut stream: TcpStream, status: u16, reason: &str, content_type: &str,
 fn respond_404(stream: TcpStream, path: &str) {
     let body = format!(
         "<!doctype html><title>404</title>\
-         <style>body{{font-family:monospace;background:#070a12;color:#eef1ff;display:grid;place-items:center;min-height:100vh;margin:0}}</style>\
+         <style>body{{font-family:monospace;background:#070a12;color:#eef1ff;\
+         display:grid;place-items:center;min-height:100vh;margin:0}}</style>\
          <h1>404 &mdash; Not Found</h1><p><code>{}</code></p>\
          <p><a href='/' style='color:#74f0d3'>&larr; Home</a></p>",
         path
@@ -143,15 +139,15 @@ fn respond_404(stream: TcpStream, path: &str) {
 }
 
 // ---------------------------------------------------------------------------
-// Handle one connection
+// Handle one connection (runs on the main thread — single-user desktop app)
 // ---------------------------------------------------------------------------
-fn handle(stream: TcpStream, root: PathBuf) {
+fn handle(stream: TcpStream, root: &Path) {
     let url_path = match parse_request(&stream) {
         Some(p) => p,
         None    => return,
     };
 
-    match resolve_path(&root, &url_path) {
+    match resolve_path(root, &url_path) {
         Some(file_path) => {
             match fs::read(&file_path) {
                 Ok(bytes) => {
@@ -159,9 +155,8 @@ fn handle(stream: TcpStream, root: PathBuf) {
                         .extension()
                         .and_then(|e| e.to_str())
                         .unwrap_or("");
-                    let ct = mime(ext);
                     println!("  200  {}", url_path);
-                    respond(stream, 200, "OK", ct, &bytes);
+                    respond(stream, 200, "OK", mime(ext), &bytes);
                 }
                 Err(_) => {
                     println!("  500  {}", url_path);
@@ -178,36 +173,35 @@ fn handle(stream: TcpStream, root: PathBuf) {
 }
 
 // ---------------------------------------------------------------------------
-// main
+// main — single-threaded accept loop
 // ---------------------------------------------------------------------------
 fn main() {
-    // port from first CLI arg, default 3000
     let port: u16 = std::env::args()
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(3000);
 
-    // serve from the directory that contains server.rs / the binary
-    // i.e. the project root where index.html lives
     let root = std::env::current_dir()
         .expect("Cannot determine current directory");
 
     let addr = format!("127.0.0.1:{}", port);
     let listener = TcpListener::bind(&addr)
-        .unwrap_or_else(|e| { eprintln!("Cannot bind {}: {}", addr, e); std::process::exit(1); });
+        .unwrap_or_else(|e| {
+            eprintln!("Cannot bind {}: {}", addr, e);
+            std::process::exit(1);
+        });
 
     println!("\n  ✓ ChronoFlow server running");
     println!("  → http://localhost:{}", port);
     println!("  Serving: {}", root.display());
     println!("  Press Ctrl+C to stop\n");
 
+    // Single-threaded: handle each request sequentially on the main thread.
+    // This is perfectly fine for a local single-user desktop app.
     for incoming in listener.incoming() {
         match incoming {
-            Ok(stream) => {
-                let root = root.clone();
-                thread::spawn(move || handle(stream, root));
-            }
-            Err(e) => eprintln!("Connection error: {}", e),
+            Ok(stream) => handle(stream, &root),
+            Err(e)     => eprintln!("Connection error: {}", e),
         }
     }
 }
