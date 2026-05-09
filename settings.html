@@ -12,6 +12,7 @@
   <link rel="stylesheet" href="css/starfield.css">
   <link rel="stylesheet" href="css/shell.css">
   <link rel="stylesheet" href="css/settings.css">
+  <link rel="stylesheet" href="css/ai-drawer.css">
 </head>
 <body class="settings-body" data-page="settings">
   <a href="#main" class="skip-link">Skip to content</a>
@@ -55,37 +56,23 @@
 
       <div class="settings-content">
         <section class="settings-section" id="appearanceSection">
-          <div class="settings-section-header">
-            <h2 class="panel-title">Appearance</h2>
-          </div>
+          <div class="settings-section-header"><h2 class="panel-title">Appearance</h2></div>
           <div class="settings-section-body" id="appearanceSettings"></div>
         </section>
-
         <section class="settings-section hidden" id="planningSection">
-          <div class="settings-section-header">
-            <h2 class="panel-title">Planning Rules</h2>
-          </div>
+          <div class="settings-section-header"><h2 class="panel-title">Planning Rules</h2></div>
           <div class="settings-section-body" id="planningSettings"></div>
         </section>
-
         <section class="settings-section hidden" id="aiSection">
-          <div class="settings-section-header">
-            <h2 class="panel-title">AI Integration</h2>
-          </div>
+          <div class="settings-section-header"><h2 class="panel-title">AI Integration</h2></div>
           <div class="settings-section-body" id="aiSettings"></div>
         </section>
-
         <section class="settings-section hidden" id="gmailSection">
-          <div class="settings-section-header">
-            <h2 class="panel-title">Gmail</h2>
-          </div>
+          <div class="settings-section-header"><h2 class="panel-title">Gmail</h2></div>
           <div class="settings-section-body" id="gmailSettings"></div>
         </section>
-
         <section class="settings-section hidden" id="dataSection">
-          <div class="settings-section-header">
-            <h2 class="panel-title">Data Management</h2>
-          </div>
+          <div class="settings-section-header"><h2 class="panel-title">Data Management</h2></div>
           <div class="settings-section-body" id="dataSettings"></div>
         </section>
       </div>
@@ -102,8 +89,6 @@
       </button>
     </div>
     <div class="ai-drawer-messages" id="aiDrawerMessages"></div>
-
-    <!-- Phase 2: plan approval -->
     <div class="ai-plan-panel" id="aiPlanPanel" style="display:none">
       <div class="ai-plan-title">Implementation Plan</div>
       <div class="ai-plan-steps" id="aiPlanSteps"></div>
@@ -112,8 +97,6 @@
         <button class="btn btn-primary" id="aiPlanApprove">Approve &amp; Start</button>
       </div>
     </div>
-
-    <!-- Phase 3: accept/reject results -->
     <div class="ai-result-panel" id="aiResultPanel" style="display:none">
       <div class="ai-result-description" id="aiResultDescription"></div>
       <div class="ai-result-actions">
@@ -121,8 +104,6 @@
         <button class="btn btn-primary" id="aiResultAccept">Apply</button>
       </div>
     </div>
-
-    <!-- Chat input -->
     <form class="ai-drawer-input-row" id="aiChatForm">
       <input type="text" class="ai-drawer-input" id="aiChatInput"
              placeholder="Ask me anything about your tasks…" autocomplete="off">
@@ -133,7 +114,6 @@
 
   <div class="toast-container" aria-live="polite"></div>
 
-  <!-- Script load order per AGENTS.md -->
   <script src="js/app.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/state.js"></script>

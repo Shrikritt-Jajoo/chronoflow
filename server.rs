@@ -1,664 +1,758 @@
-//! ChronoFlow — static file server
-//! stdlib only, no external crates, single-threaded (desktop single-user).
+//! ChronoFlow development server
 //!
-//! Build:  rustc server.rs -o server        (macOS / Linux)
-//!         rustc server.rs -o server.exe    (Windows)
-//! Run:    ./server          (default port 3000)
-//!         ./server 8080     (custom port)
-//! Then open: http://localhost:3000
+//! Compile:  rustc server.rs -o server
+//! Run:      ./server          (serves on http://localhost:4000)
+//!
+//! API surface
+//! -----------
+//! GET  /api/ping                        → 200 OK
+//! GET  /api/data?store=<name>           → JSON array for that store
+//! POST /api/data?store=<name>           → replace store with body JSON
+//! GET  /api/files?path=<rel>            → { "content": "..." }
+//! POST /api/files                       → { path, content } → write file
+//! GET  /api/versions                   → [ { name, savedAt } ]
+//! POST /api/versions/snapshot?name=<n> → create snapshot
+//! POST /api/versions/restore?name=<n>  → restore snapshot
+//! PATCH /api/versions?name=<n>&newName=<m> → rename snapshot
+//! DELETE /api/versions?name=<n>        → delete snapshot
+//! POST /api/unlock                     → { file, confirm } → unlock file
 
-use std::fs;
-use std::io::{BufRead, BufReader, Read, Write};
-use std::net::{TcpListener, TcpStream};
-use std::path::{Path, PathBuf};
+use std::{
+    collections::{HashMap, HashSet},
+    fs,
+    io::{BufRead, BufReader, Read, Write},
+    net::{TcpListener, TcpStream},
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-// ---------------------------------------------------------------------------
-// Constants
-// ---------------------------------------------------------------------------
-const DATA_FILE: &str = "data.json";
+// ---- Constants ----------------------------------------------------------
+const PORT: u16         = 4000;
+const DATA_FILE: &str   = "data.json";
 const VERSIONS_DIR: &str = ".versions";
 
-/// Files the AI may never write without explicit user unlock
-const LOCKED_FILES: &[&str] = &["js/app.js", "js/state.js", "js/utils.js"];
+// Files that require explicit unlock before writing
+const DEFAULT_LOCKED: &[&str] = &["js/app.js", "js/state.js", "js/utils.js"];
 
-/// Paths the file-write API will accept (prefix whitelist)
-const WRITE_PREFIXES: &[&str] = &["js/", "css/"];
-/// Root-level HTML files also writable
-const WRITE_HTML_SUFFIX: &str = ".html";
-
-// ---------------------------------------------------------------------------
-// Default data.json skeleton
-// ---------------------------------------------------------------------------
-const DEFAULT_DATA: &str = r#"{
-  "tasks": [],
-  "slots": [],
-  "scheduleBlocks": [],
-  "focusSessions": [],
-  "settings": {},
-  "goals": [],
-  "subtasks": [],
-  "gmailConfig": {},
-  "aiConfig": {},
-  "registeredAiJobs": [],
-  "unlockedFiles": []
-}"#;
-
-// ---------------------------------------------------------------------------
-// Runtime state (single-threaded, no mutex needed)
-// ---------------------------------------------------------------------------
+// ---- Shared server state ------------------------------------------------
+#[derive(Default)]
 struct ServerState {
-    root: PathBuf,
-    /// Files temporarily unlocked for this server session
-    unlocked_files: Vec<String>,
+    unlocked_files: HashSet<String>,
 }
 
-impl ServerState {
-    fn new(root: PathBuf) -> Self {
-        Self { root, unlocked_files: Vec::new() }
+type SharedState = Arc<Mutex<ServerState>>;
+
+// ---- Entry point --------------------------------------------------------
+fn main() {
+    let addr = format!("127.0.0.1:{PORT}");
+    let listener = TcpListener::bind(&addr).expect("Failed to bind port");
+    println!("ChronoFlow server • http://localhost:{PORT}");
+    println!("Press Ctrl+C to stop.\n");
+
+    // Ensure data.json exists
+    if !Path::new(DATA_FILE).exists() {
+        fs::write(DATA_FILE, "{}\n").expect("Could not create data.json");
+        println!("Created {DATA_FILE}");
     }
+    // Ensure .versions/ exists
+    fs::create_dir_all(VERSIONS_DIR).expect("Could not create .versions/");
 
-    fn data_path(&self) -> PathBuf { self.root.join(DATA_FILE) }
-    fn versions_dir(&self) -> PathBuf { self.root.join(VERSIONS_DIR) }
+    let state: SharedState = Arc::new(Mutex::new(ServerState::default()));
 
-    fn ensure_data_file(&self) {
-        let p = self.data_path();
-        if !p.exists() {
-            let _ = fs::write(&p, DEFAULT_DATA);
+    for stream in listener.incoming() {
+        match stream {
+            Ok(s) => {
+                let state = Arc::clone(&state);
+                std::thread::spawn(move || handle_connection(s, state));
+            }
+            Err(e) => eprintln!("Connection error: {e}"),
         }
     }
-
-    fn is_write_allowed(&self, rel_path: &str) -> bool {
-        let is_whitelisted = WRITE_PREFIXES.iter().any(|pfx| rel_path.starts_with(pfx))
-            || (rel_path.ends_with(WRITE_HTML_SUFFIX) && !rel_path.contains('/'));
-        if !is_whitelisted { return false; }
-        if LOCKED_FILES.contains(&rel_path) {
-            return self.unlocked_files.iter().any(|f| f == rel_path);
-        }
-        true
-    }
 }
 
-// ---------------------------------------------------------------------------
-// MIME types
-// ---------------------------------------------------------------------------
-fn mime(ext: &str) -> &'static str {
-    match ext {
-        "html" | "htm" => "text/html; charset=utf-8",
-        "css"          => "text/css; charset=utf-8",
-        "js"           => "application/javascript; charset=utf-8",
-        "json"         => "application/json; charset=utf-8",
-        "svg"          => "image/svg+xml",
-        "ico"          => "image/x-icon",
-        "png"          => "image/png",
-        "jpg" | "jpeg" => "image/jpeg",
-        "woff2"        => "font/woff2",
-        "woff"         => "font/woff",
-        "ttf"          => "font/ttf",
-        "txt"          => "text/plain; charset=utf-8",
-        _              => "application/octet-stream",
-    }
-}
+// ---- HTTP request handling ---------------------------------------------
+fn handle_connection(mut stream: TcpStream, state: SharedState) {
+    let mut reader = BufReader::new(stream.try_clone().expect("clone"));
 
-// ---------------------------------------------------------------------------
-// HTTP request parser — returns (method, path, query, body)
-// ---------------------------------------------------------------------------
-fn parse_request(stream: &TcpStream) -> Option<(String, String, String, Vec<u8>)> {
-    let mut reader = BufReader::new(stream);
+    // --- Parse request line
+    let mut request_line = String::new();
+    if reader.read_line(&mut request_line).is_err() { return; }
+    let parts: Vec<&str> = request_line.trim().splitn(3, ' ').collect();
+    if parts.len() < 2 { return; }
+    let method = parts[0].to_string();
+    let raw_path = parts[1].to_string();
 
-    // Read first line
-    let mut first_line = String::new();
-    reader.read_line(&mut first_line).ok()?;
-    let mut parts = first_line.split_whitespace();
-    let method = parts.next()?.to_uppercase();
-    let full_path = parts.next()?.to_owned();
-
-    let (path, query) = if let Some(q) = full_path.find('?') {
-        (full_path[..q].to_owned(), full_path[q+1..].to_owned())
-    } else {
-        (full_path, String::new())
-    };
-
-    // Read headers
-    let mut content_length: usize = 0;
+    // --- Parse headers
+    let mut headers: HashMap<String, String> = HashMap::new();
     loop {
         let mut line = String::new();
-        reader.read_line(&mut line).ok()?;
-        if line == "\r\n" || line == "\n" || line.is_empty() { break; }
-        let lower = line.to_lowercase();
-        if lower.starts_with("content-length:") {
-            content_length = lower["content-length:".len()..].trim().parse().unwrap_or(0);
+        if reader.read_line(&mut line).is_err() { break; }
+        let line = line.trim();
+        if line.is_empty() { break; }
+        if let Some((k, v)) = line.split_once(':') {
+            headers.insert(k.trim().to_lowercase(), v.trim().to_string());
         }
     }
 
-    // Read body
-    let mut body = vec![0u8; content_length];
-    if content_length > 0 {
-        let _ = reader.read_exact(&mut body);
+    // --- Read body if present
+    let body = if let Some(len_str) = headers.get("content-length") {
+        let len: usize = len_str.parse().unwrap_or(0);
+        let mut buf = vec![0u8; len];
+        let _ = reader.read_exact(&mut buf);
+        String::from_utf8_lossy(&buf).to_string()
+    } else {
+        String::new()
+    };
+
+    // --- Split path and query string
+    let (path, query) = raw_path
+        .split_once('?')
+        .map(|(p, q)| (p.to_string(), q.to_string()))
+        .unwrap_or_else(|| (raw_path.clone(), String::new()));
+
+    let params = parse_query(&query);
+
+    // --- Route
+    let response = route(&method, &path, &params, &body, &state);
+    let _ = stream.write_all(response.as_bytes());
+}
+
+// ---- Router -------------------------------------------------------------
+fn route(
+    method: &str,
+    path: &str,
+    params: &HashMap<String, String>,
+    body: &str,
+    state: &SharedState,
+) -> String {
+    // CORS preflight
+    if method == "OPTIONS" {
+        return ok_response("text/plain", "", Some(cors_headers()));
     }
 
-    Some((method, path, query, body))
-}
+    match (method, path) {
+        // ---- Ping
+        ("GET", "/api/ping") => ok_json("{\"ok\":true}"),
 
-// ---------------------------------------------------------------------------
-// Query string parser — returns value for a key
-// ---------------------------------------------------------------------------
-fn query_get<'a>(query: &'a str, key: &str) -> Option<&'a str> {
-    query.split('&').find_map(|pair| {
-        let mut kv = pair.splitn(2, '=');
-        let k = kv.next()?;
-        if k == key { kv.next() } else { None }
-    })
-}
-
-// ---------------------------------------------------------------------------
-// Percent decoder
-// ---------------------------------------------------------------------------
-fn percent_decode(s: &str) -> String {
-    let mut out = String::with_capacity(s.len());
-    let bytes = s.as_bytes();
-    let mut i = 0;
-    while i < bytes.len() {
-        if bytes[i] == b'%' && i + 2 < bytes.len() {
-            if let (Some(h), Some(l)) = (hex_val(bytes[i+1]), hex_val(bytes[i+2])) {
-                out.push(char::from(h << 4 | l));
-                i += 3; continue;
+        // ---- Data store
+        ("GET", "/api/data") => {
+            let store = params.get("store").cloned().unwrap_or_default();
+            match read_store(&store) {
+                Ok(data) => ok_json(&data),
+                Err(e)   => error_response(500, &e),
             }
         }
-        if bytes[i] == b'+' { out.push(' '); }
-        else { out.push(char::from(bytes[i])); }
-        i += 1;
+        ("POST", "/api/data") => {
+            let store = params.get("store").cloned().unwrap_or_default();
+            match write_store(&store, body) {
+                Ok(_)  => ok_json("{\"ok\":true}"),
+                Err(e) => error_response(500, &e),
+            }
+        }
+
+        // ---- File read/write
+        ("GET", "/api/files") => {
+            let rel = params.get("path").cloned().unwrap_or_default();
+            match safe_read_file(&rel) {
+                Ok(content) => ok_json(&format!("{{\"content\":{}}}",
+                    serde_escape_json_string(&content))),
+                Err(e) => error_response(404, &e),
+            }
+        }
+        ("POST", "/api/files") => {
+            // Body: { "path": "...", "content": "..." }
+            let rel  = json_str_field(body, "path");
+            let content = json_str_field(body, "content");
+            if rel.is_empty() {
+                return error_response(400, "missing path");
+            }
+            // Locked file check
+            {
+                let s = state.lock().unwrap();
+                if DEFAULT_LOCKED.contains(&rel.as_str()) && !s.unlocked_files.contains(&rel) {
+                    return error_response(403, &format!("{rel} is locked. Use /api/unlock first."));
+                }
+            }
+            match safe_write_file(&rel, &content) {
+                Ok(_)  => ok_json("{\"ok\":true}"),
+                Err(e) => error_response(500, &e),
+            }
+        }
+
+        // ---- Versions
+        ("GET", "/api/versions") => {
+            match list_versions() {
+                Ok(json) => ok_json(&json),
+                Err(e)   => error_response(500, &e),
+            }
+        }
+        ("POST", "/api/versions/snapshot") => {
+            let name = params.get("name").cloned().unwrap_or_else(|| {
+                format!("snapshot-{}", unix_ts())
+            });
+            match create_snapshot(&name) {
+                Ok(_)  => ok_json(&format!("{{\"name\":\"{name}\"}}")  ),
+                Err(e) => error_response(500, &e),
+            }
+        }
+        ("POST", "/api/versions/restore") => {
+            let name = params.get("name").cloned().unwrap_or_default();
+            match restore_snapshot(&name) {
+                Ok(_)  => ok_json("{\"ok\":true}"),
+                Err(e) => error_response(500, &e),
+            }
+        }
+        ("PATCH", "/api/versions") | ("DELETE", "/api/versions") => {
+            let name = params.get("name").cloned().unwrap_or_default();
+            if method == "DELETE" {
+                let vdir = PathBuf::from(VERSIONS_DIR).join(&name);
+                if vdir.exists() { let _ = fs::remove_dir_all(&vdir); }
+                ok_json("{\"ok\":true}")
+            } else {
+                let new_name = params.get("newName").cloned().unwrap_or_default();
+                let old_dir  = PathBuf::from(VERSIONS_DIR).join(&name);
+                let new_dir  = PathBuf::from(VERSIONS_DIR).join(&new_name);
+                if old_dir.exists() {
+                    let _ = fs::rename(&old_dir, &new_dir);
+                }
+                ok_json("{\"ok\":true}")
+            }
+        }
+
+        // ---- Unlock
+        ("POST", "/api/unlock") => {
+            let file    = json_str_field(body, "file");
+            let confirm = json_bool_field(body, "confirm");
+            if confirm && !file.is_empty() {
+                state.lock().unwrap().unlocked_files.insert(file.clone());
+                ok_json(&format!("{{\"unlocked\":\"{file}\"}}"))
+            } else {
+                error_response(400, "confirm must be true")
+            }
+        }
+
+        // ---- Static file fallback
+        _ => serve_static(path),
     }
-    out
 }
 
-fn hex_val(b: u8) -> Option<u8> {
-    match b {
-        b'0'..=b'9' => Some(b - b'0'),
-        b'a'..=b'f' => Some(b - b'a' + 10),
-        b'A'..=b'F' => Some(b - b'A' + 10),
-        _ => None,
+// ---- Data store helpers ------------------------------------------------
+
+fn read_all_data() -> Result<serde_json::Value, String> {
+    let raw = fs::read_to_string(DATA_FILE).map_err(|e| e.to_string())?;
+    serde_json::from_str(&raw).map_err(|e| e.to_string())
+}
+
+fn write_all_data(data: &serde_json::Value) -> Result<(), String> {
+    let json = serde_json::to_string_pretty(data).map_err(|e| e.to_string())?;
+    fs::write(DATA_FILE, json + "\n").map_err(|e| e.to_string())
+}
+
+fn read_store(store: &str) -> Result<String, String> {
+    if store.is_empty() { return Err("store name required".into()); }
+    let data = read_all_data()?;
+    let val  = data.get(store).cloned().unwrap_or(serde_json::Value::Array(vec![]));
+    serde_json::to_string(&val).map_err(|e| e.to_string())
+}
+
+fn write_store(store: &str, body: &str) -> Result<(), String> {
+    if store.is_empty() { return Err("store name required".into()); }
+    let new_val: serde_json::Value =
+        serde_json::from_str(body).map_err(|e| e.to_string())?;
+    let mut data = read_all_data().unwrap_or_else(|_| serde_json::json!({}));
+    data[store] = new_val;
+    write_all_data(&data)
+}
+
+// ---- File helpers -------------------------------------------------------
+
+fn safe_path(rel: &str) -> Result<PathBuf, String> {
+    let base = std::env::current_dir().map_err(|e| e.to_string())?;
+    let full = base.join(rel);
+    // Prevent path traversal
+    if !full.starts_with(&base) {
+        return Err("Path traversal not allowed".into());
+    }
+    Ok(full)
+}
+
+fn safe_read_file(rel: &str) -> Result<String, String> {
+    let p = safe_path(rel)?;
+    fs::read_to_string(&p).map_err(|e| e.to_string())
+}
+
+fn safe_write_file(rel: &str, content: &str) -> Result<(), String> {
+    let p = safe_path(rel)?;
+    if let Some(parent) = p.parent() {
+        fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+    }
+    fs::write(&p, content).map_err(|e| e.to_string())
+}
+
+// ---- Version helpers ----------------------------------------------------
+
+fn unix_ts() -> u64 {
+    SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0)
+}
+
+/// Snapshot: copy js/, css/, *.html, data.json into .versions/<name>/
+fn create_snapshot(name: &str) -> Result<(), String> {
+    let dest = PathBuf::from(VERSIONS_DIR).join(name);
+    fs::create_dir_all(&dest).map_err(|e| e.to_string())?;
+
+    // Write metadata
+    let meta = format!("{{\"name\":\"{name}\",\"savedAt\":\"{}\"}}",
+        chrono_now_iso());
+    fs::write(dest.join("meta.json"), meta).map_err(|e| e.to_string())?;
+
+    // Copy data.json
+    if Path::new(DATA_FILE).exists() {
+        fs::copy(DATA_FILE, dest.join(DATA_FILE)).map_err(|e| e.to_string())?;
+    }
+
+    // Copy js/, css/, *.html
+    copy_dir_recursive(Path::new("js"),  &dest.join("js"))?;
+    copy_dir_recursive(Path::new("css"), &dest.join("css"))?;
+
+    // Copy all .html in root
+    for entry in fs::read_dir(".").map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let p = entry.path();
+        if p.extension().and_then(|e| e.to_str()) == Some("html") {
+            if let Some(fname) = p.file_name() {
+                fs::copy(&p, dest.join(fname)).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Restore: overwrite working tree from .versions/<name>/
+fn restore_snapshot(name: &str) -> Result<(), String> {
+    let src = PathBuf::from(VERSIONS_DIR).join(name);
+    if !src.exists() {
+        return Err(format!("Version \"{name}\" not found"));
+    }
+
+    // Restore data.json
+    let src_data = src.join(DATA_FILE);
+    if src_data.exists() {
+        fs::copy(&src_data, DATA_FILE).map_err(|e| e.to_string())?;
+    }
+
+    // Restore js/ and css/
+    copy_dir_recursive(&src.join("js"),  Path::new("js"))?;
+    copy_dir_recursive(&src.join("css"), Path::new("css"))?;
+
+    // Restore .html files
+    for entry in fs::read_dir(&src).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        let p = entry.path();
+        if p.extension().and_then(|e| e.to_str()) == Some("html") {
+            if let Some(fname) = p.file_name() {
+                fs::copy(&p, fname).map_err(|e| e.to_string())?;
+            }
+        }
+    }
+    Ok(())
+}
+
+fn list_versions() -> Result<String, String> {
+    let dir = Path::new(VERSIONS_DIR);
+    if !dir.exists() { return Ok("[]".into()); }
+
+    let mut versions: Vec<(String, String)> = vec![];
+
+    for entry in fs::read_dir(dir).map_err(|e| e.to_string())? {
+        let entry = entry.map_err(|e| e.to_string())?;
+        if entry.path().is_dir() {
+            let name = entry.file_name().to_string_lossy().to_string();
+            let meta_path = entry.path().join("meta.json");
+            let saved_at = if meta_path.exists() {
+                let raw = fs::read_to_string(&meta_path).unwrap_or_default();
+                json_str_field(&raw, "savedAt")
+            } else {
+                String::new()
+            };
+            versions.push((name, saved_at));
+        }
+    }
+
+    // Sort newest first
+    versions.sort_by(|a, b| b.1.cmp(&a.1));
+
+    let items: Vec<String> = versions
+        .iter()
+        .map(|(n, s)| format!("{{\"name\":\"{n}\",\"savedAt\":\"{s}\"}}" ))
+        .collect();
+    Ok(format!("[{}]", items.join(",")))
+}
+
+fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    if !src.exists() { return Ok(()); }
+    fs::create_dir_all(dst).map_err(|e| e.to_string())?;
+    for entry in fs::read_dir(src).map_err(|e| e.to_string())? {
+        let entry  = entry.map_err(|e| e.to_string())?;
+        let src_p  = entry.path();
+        let dst_p  = dst.join(entry.file_name());
+        if src_p.is_dir() {
+            copy_dir_recursive(&src_p, &dst_p)?;
+        } else {
+            fs::copy(&src_p, &dst_p).map_err(|e| e.to_string())?;
+        }
+    }
+    Ok(())
+}
+
+// ---- Static file server ------------------------------------------------
+
+fn serve_static(path: &str) -> String {
+    let rel = if path == "/" { "index.html" } else { path.trim_start_matches('/') };
+    let full = PathBuf::from(rel);
+
+    // Block directory traversal
+    if rel.contains("..") {
+        return error_response(403, "Forbidden");
+    }
+
+    match fs::read(&full) {
+        Ok(bytes) => {
+            let mime = mime_type(rel);
+            let header = format!(
+                "HTTP/1.1 200 OK\r\nContent-Type: {mime}\r\n\
+                 Content-Length: {}\r\nCache-Control: no-cache\r\n\
+                 {}\r\n",
+                bytes.len(),
+                cors_headers()
+            );
+            let mut response = header.into_bytes();
+            response.extend_from_slice(&bytes);
+            String::from_utf8_lossy(&response).to_string()
+        }
+        Err(_) => error_response(404, "Not found"),
     }
 }
 
-// ---------------------------------------------------------------------------
-// Static file resolver (blocks path traversal)
-// ---------------------------------------------------------------------------
-fn resolve_static(root: &Path, url_path: &str) -> Option<PathBuf> {
-    let decoded = percent_decode(url_path);
-    let rel = decoded.trim_start_matches('/');
-    let candidate = if rel.is_empty() { root.join("index.html") } else { root.join(rel) };
-    let canonical  = candidate.canonicalize().ok()?;
-    let root_canon = root.canonicalize().ok()?;
-    if !canonical.starts_with(&root_canon) { return None; }
-    if canonical.is_dir() {
-        let index = canonical.join("index.html");
-        if index.exists() { Some(index) } else { None }
-    } else {
-        Some(canonical)
-    }
+fn mime_type(path: &str) -> &'static str {
+    if path.ends_with(".html")       { "text/html; charset=utf-8" }
+    else if path.ends_with(".css")   { "text/css; charset=utf-8" }
+    else if path.ends_with(".js")    { "application/javascript; charset=utf-8" }
+    else if path.ends_with(".json")  { "application/json" }
+    else if path.ends_with(".svg")   { "image/svg+xml" }
+    else if path.ends_with(".png")   { "image/png" }
+    else if path.ends_with(".ico")   { "image/x-icon" }
+    else if path.ends_with(".woff2") { "font/woff2" }
+    else                             { "application/octet-stream" }
 }
 
-// ---------------------------------------------------------------------------
-// HTTP response helpers
-// ---------------------------------------------------------------------------
-fn respond(mut stream: TcpStream, status: u16, reason: &str, ct: &str, body: &[u8]) {
-    let header = format!(
-        "HTTP/1.1 {status} {reason}\r\n\
-         Content-Type: {ct}\r\n\
-         Content-Length: {}\r\n\
-         Cache-Control: no-cache\r\n\
-         Access-Control-Allow-Origin: *\r\n\
-         Access-Control-Allow-Methods: GET, POST, DELETE, PATCH, OPTIONS\r\n\
-         Access-Control-Allow-Headers: Content-Type\r\n\
-         \r\n",
+// ---- Response builders -------------------------------------------------
+
+fn ok_json(body: &str) -> String {
+    ok_response("application/json", body, None)
+}
+
+fn ok_response(content_type: &str, body: &str, extra_headers: Option<String>) -> String {
+    let extra = extra_headers.unwrap_or_else(|| cors_headers());
+    format!(
+        "HTTP/1.1 200 OK\r\nContent-Type: {content_type}\r\n\
+         Content-Length: {}\r\n{extra}\r\n{body}",
         body.len()
-    );
-    let _ = stream.write_all(header.as_bytes());
-    let _ = stream.write_all(body);
+    )
 }
 
-fn json_ok(stream: TcpStream, body: &str) {
-    respond(stream, 200, "OK", "application/json; charset=utf-8", body.as_bytes());
+fn error_response(code: u16, msg: &str) -> String {
+    let body = format!("{{\"error\":\"{msg}\"}}");
+    format!(
+        "HTTP/1.1 {code} Error\r\nContent-Type: application/json\r\n\
+         Content-Length: {}\r\n{}\r\n{body}",
+        body.len(),
+        cors_headers()
+    )
 }
 
-fn json_err(stream: TcpStream, status: u16, msg: &str) {
-    let body = format!(r#"{{"error":"{msg}"}}"#);
-    respond(stream, status, "Error", "application/json; charset=utf-8", body.as_bytes());
+fn cors_headers() -> String {
+    "Access-Control-Allow-Origin: *\r\n\
+     Access-Control-Allow-Methods: GET, POST, PUT, PATCH, DELETE, OPTIONS\r\n\
+     Access-Control-Allow-Headers: Content-Type\r\n".to_string()
 }
 
-fn respond_404(stream: TcpStream, path: &str) {
-    let body = format!(
-        "<!doctype html><title>404</title>\
-         <style>body{{font-family:monospace;background:#070a12;color:#eef1ff;\
-         display:grid;place-items:center;min-height:100vh;margin:0}}</style>\
-         <h1>404 &mdash; Not Found</h1><p><code>{path}</code></p>\
-         <p><a href='/' style='color:#74f0d3'>&larr; Home</a></p>"
-    );
-    respond(stream, 404, "Not Found", "text/html; charset=utf-8", body.as_bytes());
-}
+// ---- Tiny JSON helpers (no external crates) ----------------------------
 
-// ---------------------------------------------------------------------------
-// Minimal JSON helpers (no serde — stdlib only)
-// ---------------------------------------------------------------------------
+// Minimal JSON pulled from a "serde_json" stand-in using std only
+// We re-use serde_json::Value via the trick of writing our own subset:
+// Actually for this file we use the real serde_json crate.
+// Add to your Cargo.toml if using Cargo:
+//   [dependencies]
+//   serde_json = "1"
+// OR compile with:
+//   rustc server.rs -o server  (requires serde_json in your build env)
+// For zero-dependency build, replace serde_json calls with the
+// hand-rolled helpers below.
 
-/// Extract a top-level string field from a flat JSON object.
-fn json_str_field<'a>(json: &'a str, key: &str) -> Option<&'a str> {
-    let needle = format!("\"{}\":", key);
-    let start = json.find(&needle)? + needle.len();
-    let rest = json[start..].trim_start();
-    if rest.starts_with('"') {
-        let inner = &rest[1..];
-        let end = inner.find('"')?;
-        Some(&inner[..end])
-    } else {
-        None
+mod serde_json {
+    use std::collections::HashMap;
+
+    #[derive(Clone, Debug)]
+    pub enum Value {
+        Null,
+        Bool(bool),
+        Number(f64),
+        Str(String),
+        Array(Vec<Value>),
+        Object(HashMap<String, Value>),
     }
-}
 
-/// Extract a top-level bool field.
-fn json_bool_field(json: &str, key: &str) -> Option<bool> {
-    let needle = format!("\"{}\":", key);
-    let start = json.find(&needle)? + needle.len();
-    let rest = json[start..].trim_start();
-    if rest.starts_with("true")  { Some(true)  }
-    else if rest.starts_with("false") { Some(false) }
-    else { None }
-}
+    impl Value {
+        pub fn get(&self, key: &str) -> Option<&Value> {
+            if let Value::Object(m) = self { m.get(key) } else { None }
+        }
+    }
 
-// ---------------------------------------------------------------------------
-// API handlers
-// ---------------------------------------------------------------------------
+    impl std::ops::Index<&str> for Value {
+        type Output = Value;
+        fn index(&self, key: &str) -> &Value {
+            static NULL: Value = Value::Null;
+            self.get(key).unwrap_or(&NULL)
+        }
+    }
+    impl std::ops::IndexMut<&str> for Value {
+        fn index_mut(&mut self, key: &str) -> &mut Value {
+            if let Value::Object(m) = self {
+                m.entry(key.to_string()).or_insert(Value::Null)
+            } else { panic!("not an object") }
+        }
+    }
 
-// GET /api/ping
-fn handle_ping(stream: TcpStream) {
-    json_ok(stream, r#"{"ok":true,"app":"chronoflow"}"#);
-}
+    pub fn from_str(s: &str) -> Result<Value, String> {
+        parse(s.trim())
+    }
 
-// GET /api/data  or  GET /api/data?store=tasks
-fn handle_data_get(stream: TcpStream, query: &str, state: &ServerState) {
-    state.ensure_data_file();
-    let raw = match fs::read_to_string(state.data_path()) {
-        Ok(s) => s,
-        Err(_) => { json_err(stream, 500, "Cannot read data.json"); return; }
-    };
+    pub fn to_string(v: &Value) -> Result<String, String> {
+        Ok(encode(v))
+    }
+    pub fn to_string_pretty(v: &Value) -> Result<String, String> {
+        Ok(encode_pretty(v, 0))
+    }
 
-    if let Some(store) = query_get(query, "store") {
-        // Return just that store's array
-        let needle = format!("\"{}\":", store);
-        if let Some(pos) = raw.find(&needle) {
-            let after = raw[pos + needle.len()..].trim_start();
-            // find matching bracket
-            let (open, close) = if after.starts_with('[') { ('[', ']') } else { ('{', '}') };
-            let mut depth = 0usize;
-            let mut end = 0usize;
-            for (i, ch) in after.char_indices() {
-                if ch == open  { depth += 1; }
-                if ch == close { depth -= 1; if depth == 0 { end = i + 1; break; } }
+    pub fn json(s: &str) -> Value {
+        from_str(s).unwrap_or(Value::Null)
+    }
+
+    // ---- Encoder -------------------------------------------------------
+    fn encode(v: &Value) -> String {
+        match v {
+            Value::Null        => "null".into(),
+            Value::Bool(b)     => b.to_string(),
+            Value::Number(n)   => {
+                if n.fract() == 0.0 && n.abs() < 1e15 { format!("{}", *n as i64) }
+                else { format!("{n}") }
             }
-            json_ok(stream, &after[..end]);
-        } else {
-            json_ok(stream, "[]");
-        }
-    } else {
-        json_ok(stream, &raw);
-    }
-}
-
-// POST /api/data?store=tasks  — body is the new array for that store
-fn handle_data_post(stream: TcpStream, query: &str, body: &[u8], state: &ServerState) {
-    state.ensure_data_file();
-    let store = match query_get(query, "store") {
-        Some(s) => s.to_owned(),
-        None    => { json_err(stream, 400, "Missing store param"); return; }
-    };
-    let new_value = match std::str::from_utf8(body) {
-        Ok(s) => s.trim().to_owned(),
-        Err(_) => { json_err(stream, 400, "Invalid UTF-8 body"); return; }
-    };
-
-    let raw = fs::read_to_string(state.data_path()).unwrap_or_else(|_| DEFAULT_DATA.to_owned());
-
-    let needle = format!("\"{}\":", store);
-    let updated = if let Some(pos) = raw.find(&needle) {
-        let after = raw[pos + needle.len()..].trim_start();
-        let (open, close) = if after.starts_with('[') { ('[', ']') }
-                            else if after.starts_with('{') { ('{', '}') }
-                            else { ('[', ']') };
-        let mut depth = 0usize;
-        let mut end = 0usize;
-        for (i, ch) in after.char_indices() {
-            if ch == open  { depth += 1; }
-            if ch == close { depth -= 1; if depth == 0 { end = i + ch.len_utf8(); break; } }
-        }
-        // replace old value with new
-        let old_start = pos + needle.len() + (raw[pos+needle.len()..].len() - after.len());
-        format!("{}{}{}", &raw[..old_start], new_value, &raw[old_start + end..])
-    } else {
-        // store not found — append before closing brace
-        let trimmed = raw.trim_end();
-        if trimmed.ends_with('}') {
-            format!("{},\n  \"{}\": {}\n}}", &trimmed[..trimmed.len()-1], store, new_value)
-        } else {
-            raw.clone()
-        }
-    };
-
-    match fs::write(state.data_path(), &updated) {
-        Ok(_)  => json_ok(stream, r#"{"ok":true}"#),
-        Err(e) => json_err(stream, 500, &e.to_string()),
-    }
-}
-
-// GET /api/files?path=js/planner.js
-fn handle_files_get(stream: TcpStream, query: &str, state: &ServerState) {
-    let rel = match query_get(query, "path") {
-        Some(p) => percent_decode(p),
-        None    => { json_err(stream, 400, "Missing path param"); return; }
-    };
-    let full = state.root.join(&rel);
-    // safety: must stay in root
-    match full.canonicalize() {
-        Ok(canon) => {
-            let root_canon = state.root.canonicalize().unwrap();
-            if !canon.starts_with(&root_canon) {
-                json_err(stream, 403, "Path outside project root"); return;
-            }
-            match fs::read_to_string(&canon) {
-                Ok(contents) => {
-                    // return as JSON: { "path": "...", "content": "..." }
-                    let escaped = contents.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r");
-                    let body = format!(r#"{{"path":"{rel}","content":"{escaped}"}}"#);
-                    json_ok(stream, &body);
-                }
-                Err(_) => json_err(stream, 404, "File not found or not readable"),
-            }
-        }
-        Err(_) => json_err(stream, 404, "File not found"),
-    }
-}
-
-// POST /api/files  — body: { "path": "js/foo.js", "content": "..." }
-fn handle_files_post(stream: TcpStream, body: &[u8], state: &ServerState) {
-    let body_str = match std::str::from_utf8(body) {
-        Ok(s) => s,
-        Err(_) => { json_err(stream, 400, "Invalid UTF-8"); return; }
-    };
-    let rel = match json_str_field(body_str, "path") {
-        Some(p) => p.to_owned(),
-        None    => { json_err(stream, 400, "Missing path field"); return; }
-    };
-    let content = match json_str_field(body_str, "content") {
-        Some(c) => c.replace("\\n", "\n").replace("\\r", "\r").replace("\\\"", "\"").replace("\\\\", "\\"),
-        None    => { json_err(stream, 400, "Missing content field"); return; }
-    };
-
-    if !state.is_write_allowed(&rel) {
-        if LOCKED_FILES.contains(&rel.as_str()) {
-            json_err(stream, 403, "File is locked. Unlock it first via /api/unlock");
-        } else {
-            json_err(stream, 403, "Path not in write whitelist (js/, css/, *.html)");
-        }
-        return;
-    }
-
-    let full = state.root.join(&rel);
-    if let Some(parent) = full.parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    match fs::write(&full, &content) {
-        Ok(_)  => json_ok(stream, r#"{"ok":true}"#),
-        Err(e) => json_err(stream, 500, &e.to_string()),
-    }
-}
-
-// GET /api/versions — list saved versions
-fn handle_versions_list(stream: TcpStream, state: &ServerState) {
-    let dir = state.versions_dir();
-    let _ = fs::create_dir_all(&dir);
-    let mut entries: Vec<String> = Vec::new();
-    if let Ok(rd) = fs::read_dir(&dir) {
-        for entry in rd.flatten() {
-            if entry.path().is_dir() {
-                let name = entry.file_name().to_string_lossy().into_owned();
-                // read meta if present
-                let meta_path = entry.path().join("meta.json");
-                let meta = fs::read_to_string(&meta_path).unwrap_or_else(|_| "{}".to_owned());
-                entries.push(format!(r#"{{"name":"{name}","meta":{meta}}}"#));
+            Value::Str(s)      => format!("\"{}\"", escape_str(s)),
+            Value::Array(a)    => format!("[{}]", a.iter().map(encode).collect::<Vec<_>>().join(",")),
+            Value::Object(m)   => {
+                let pairs: Vec<String> = m.iter()
+                    .map(|(k, v)| format!("\"{}\": {}", escape_str(k), encode(v)))
+                    .collect();
+                format!("{{{}}}", pairs.join(","))
             }
         }
     }
-    entries.sort();
-    let body = format!("[{}]", entries.join(","));
-    json_ok(stream, &body);
-}
-
-// POST /api/versions/snapshot?name=my-version  — copy live files into .versions/{name}/
-fn handle_versions_snapshot(stream: TcpStream, query: &str, state: &ServerState) {
-    let raw_name = query_get(query, "name").unwrap_or("snapshot");
-    let name = sanitise_version_name(raw_name);
-    let dest = state.versions_dir().join(&name);
-    let _ = fs::create_dir_all(&dest);
-
-    let errors = copy_project_files(&state.root, &dest);
-    // write meta
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs()).unwrap_or(0);
-    let meta = format!(r#"{{"createdAt":{ts},"auto":false}}"#);
-    let _ = fs::write(dest.join("meta.json"), &meta);
-
-    if errors.is_empty() {
-        json_ok(stream, &format!(r#"{{"ok":true,"name":"{name}"}}"#));
-    } else {
-        json_err(stream, 500, &format!("Partial copy: {}", errors.join("; ")));
+    fn encode_pretty(v: &Value, indent: usize) -> String {
+        let pad = "  ".repeat(indent);
+        let pad1 = "  ".repeat(indent + 1);
+        match v {
+            Value::Array(a) => {
+                if a.is_empty() { return "[]".into(); }
+                let items: Vec<String> = a.iter().map(|i| format!("{pad1}{}", encode_pretty(i, indent+1))).collect();
+                format!("[\n{}\n{pad}]", items.join(",\n"))
+            }
+            Value::Object(m) => {
+                if m.is_empty() { return "{}".into(); }
+                let pairs: Vec<String> = m.iter()
+                    .map(|(k, val)| format!("{pad1}\"{}\": {}", escape_str(k), encode_pretty(val, indent+1)))
+                    .collect();
+                format!("{{{\n}{}\n{pad}}}", pairs.join(",\n"))
+            }
+            other => encode(other),
+        }
     }
-}
-
-// POST /api/versions/restore?name=my-version  — copy .versions/{name}/ back to live
-fn handle_versions_restore(stream: TcpStream, query: &str, state: &ServerState) {
-    let raw_name = match query_get(query, "name") {
-        Some(n) => n,
-        None    => { json_err(stream, 400, "Missing name param"); return; }
-    };
-    let name = sanitise_version_name(raw_name);
-    let src  = state.versions_dir().join(&name);
-    if !src.exists() { json_err(stream, 404, "Version not found"); return; }
-
-    let errors = copy_project_files(&src, &state.root);
-    if errors.is_empty() {
-        json_ok(stream, r#"{"ok":true}"#);
-    } else {
-        json_err(stream, 500, &format!("Partial restore: {}", errors.join("; ")));
+    fn escape_str(s: &str) -> String {
+        s.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t")
     }
-}
 
-// DELETE /api/versions?name=my-version
-fn handle_versions_delete(stream: TcpStream, query: &str, state: &ServerState) {
-    let raw_name = match query_get(query, "name") {
-        Some(n) => n,
-        None    => { json_err(stream, 400, "Missing name param"); return; }
-    };
-    let name = sanitise_version_name(raw_name);
-    let dir  = state.versions_dir().join(&name);
-    if !dir.exists() { json_err(stream, 404, "Version not found"); return; }
-    match fs::remove_dir_all(&dir) {
-        Ok(_)  => json_ok(stream, r#"{"ok":true}"#),
-        Err(e) => json_err(stream, 500, &e.to_string()),
+    // ---- Parser --------------------------------------------------------
+    fn parse(s: &str) -> Result<Value, String> {
+        let (val, rest) = parse_value(s)?;
+        if !rest.trim().is_empty() { return Err(format!("trailing: {rest}")); }
+        Ok(val)
     }
-}
-
-// PATCH /api/versions?name=old&newName=new
-fn handle_versions_rename(stream: TcpStream, query: &str, state: &ServerState) {
-    let old = match query_get(query, "name")    { Some(n) => sanitise_version_name(n), None => { json_err(stream, 400, "Missing name");    return; } };
-    let new = match query_get(query, "newName") { Some(n) => sanitise_version_name(n), None => { json_err(stream, 400, "Missing newName"); return; } };
-    let src  = state.versions_dir().join(&old);
-    let dest = state.versions_dir().join(&new);
-    if !src.exists() { json_err(stream, 404, "Version not found"); return; }
-    match fs::rename(&src, &dest) {
-        Ok(_)  => json_ok(stream, r#"{"ok":true}"#),
-        Err(e) => json_err(stream, 500, &e.to_string()),
+    fn parse_value(s: &str) -> Result<(Value, &str), String> {
+        let s = s.trim_start();
+        if s.starts_with('"') { parse_string(s) }
+        else if s.starts_with('{') { parse_object(s) }
+        else if s.starts_with('[') { parse_array(s) }
+        else if s.starts_with("true")  { Ok((Value::Bool(true),  &s[4..])) }
+        else if s.starts_with("false") { Ok((Value::Bool(false), &s[5..])) }
+        else if s.starts_with("null")  { Ok((Value::Null,        &s[4..])) }
+        else { parse_number(s) }
     }
-}
-
-// POST /api/unlock  — body: { "file": "js/app.js", "confirm": true }
-fn handle_unlock(stream: TcpStream, body: &[u8], state: &mut ServerState) {
-    let body_str = match std::str::from_utf8(body) {
-        Ok(s) => s,
-        Err(_) => { json_err(stream, 400, "Invalid UTF-8"); return; }
-    };
-    let file    = match json_str_field(body_str, "file")    { Some(f) => f.to_owned(), None => { json_err(stream, 400, "Missing file field");    return; } };
-    let confirm = json_bool_field(body_str, "confirm").unwrap_or(false);
-    if !confirm { json_err(stream, 400, "confirm must be true"); return; }
-    if !LOCKED_FILES.contains(&file.as_str()) {
-        json_err(stream, 400, "File is not in the locked list"); return;
-    }
-    if !state.unlocked_files.contains(&file) {
-        state.unlocked_files.push(file.clone());
-    }
-    println!("  ⚠  Unlocked: {file}");
-    json_ok(stream, &format!(r#"{{"ok":true,"file":"{file}","warning":"This file is now writable for this server session only."}}""));
-}
-
-// ---------------------------------------------------------------------------
-// Version file copy helper — copies js/, css/, *.html, data.json
-// ---------------------------------------------------------------------------
-fn copy_project_files(src: &Path, dest: &Path) -> Vec<String> {
-    let mut errors = Vec::new();
-    let copy_dirs = ["js", "css"];
-    let copy_root_exts = ["html", "json"];
-
-    // Copy subdirectories
-    for dir in &copy_dirs {
-        let s = src.join(dir);
-        let d = dest.join(dir);
-        if s.exists() {
-            let _ = fs::create_dir_all(&d);
-            if let Ok(rd) = fs::read_dir(&s) {
-                for entry in rd.flatten() {
-                    let to = d.join(entry.file_name());
-                    if let Err(e) = fs::copy(entry.path(), &to) {
-                        errors.push(format!("{}: {e}", entry.path().display()));
+    fn parse_string(s: &str) -> Result<(Value, &str), String> {
+        let bytes = s.as_bytes();
+        let mut i = 1; // skip opening "
+        let mut result = String::new();
+        while i < bytes.len() {
+            match bytes[i] {
+                b'"' => { return Ok((Value::Str(result), &s[i+1..])); }
+                b'\\' => {
+                    i += 1;
+                    match bytes.get(i) {
+                        Some(b'"')  => result.push('"'),
+                        Some(b'\\') => result.push('\\'),
+                        Some(b'n')  => result.push('\n'),
+                        Some(b'r')  => result.push('\r'),
+                        Some(b't')  => result.push('\t'),
+                        _ => result.push(bytes[i] as char),
                     }
                 }
+                c => result.push(c as char),
             }
+            i += 1;
+        }
+        Err("unterminated string".into())
+    }
+    fn parse_number(s: &str) -> Result<(Value, &str), String> {
+        let end = s.find(|c: char| !c.is_ascii_digit() && c != '.' && c != '-' && c != 'e' && c != 'E' && c != '+')
+            .unwrap_or(s.len());
+        let num: f64 = s[..end].parse().map_err(|_| format!("bad number: {}", &s[..end]))?;
+        Ok((Value::Number(num), &s[end..]))
+    }
+    fn parse_array(s: &str) -> Result<(Value, &str), String> {
+        let mut s = &s[1..]; // skip [
+        let mut arr = vec![];
+        s = s.trim_start();
+        if s.starts_with(']') { return Ok((Value::Array(arr), &s[1..])); }
+        loop {
+            let (val, rest) = parse_value(s)?;
+            arr.push(val);
+            s = rest.trim_start();
+            if s.starts_with(']') { return Ok((Value::Array(arr), &s[1..])); }
+            if s.starts_with(',') { s = &s[1..]; } else { return Err("expected , or ]".into()); }
         }
     }
-
-    // Copy root-level html + data.json (skip .versions itself)
-    if let Ok(rd) = fs::read_dir(src) {
-        for entry in rd.flatten() {
-            let path = entry.path();
-            if path.is_file() {
-                let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                if copy_root_exts.contains(&ext) {
-                    let to = dest.join(entry.file_name());
-                    if let Err(e) = fs::copy(&path, &to) {
-                        errors.push(format!("{}: {e}", path.display()));
-                    }
-                }
-            }
+    fn parse_object(s: &str) -> Result<(Value, &str), String> {
+        let mut s = &s[1..]; // skip {
+        let mut map = HashMap::new();
+        s = s.trim_start();
+        if s.starts_with('}') { return Ok((Value::Object(map), &s[1..])); }
+        loop {
+            let (key_val, rest) = parse_string(s.trim_start())?;
+            let key = if let Value::Str(k) = key_val { k } else { return Err("key not string".into()); };
+            let rest = rest.trim_start();
+            if !rest.starts_with(':') { return Err("expected :".into()); }
+            let (val, rest) = parse_value(&rest[1..])?;
+            map.insert(key, val);
+            s = rest.trim_start();
+            if s.starts_with('}') { return Ok((Value::Object(map), &s[1..])); }
+            if s.starts_with(',') { s = &s[1..]; } else { return Err("expected , or }".into()); }
         }
     }
-    errors
 }
 
-// ---------------------------------------------------------------------------
-// Version name sanitiser (no path separators, no special chars)
-// ---------------------------------------------------------------------------
-fn sanitise_version_name(name: &str) -> String {
-    name.chars()
-        .map(|c| if c.is_alphanumeric() || c == '-' || c == '_' || c == '.' { c } else { '_' })
-        .take(64)
+// ---- String helpers (used by routes before serde_json is available) ----
+
+/// Extract a string field value from a raw JSON string (simple, no full parse needed)
+fn json_str_field(json: &str, field: &str) -> String {
+    let needle = format!("\"{field}\":");
+    if let Some(start) = json.find(&needle) {
+        let after = json[start + needle.len()..].trim_start();
+        if after.starts_with('"') {
+            let inner = &after[1..];
+            let end = inner.find(|c| c == '"').unwrap_or(inner.len());
+            return inner[..end]
+                .replace("\\n", "\n").replace("\\r", "\r")
+                .replace("\\t", "\t").replace("\\\"", "\"").replace("\\\\", "\\");
+        }
+    }
+    String::new()
+}
+
+fn json_bool_field(json: &str, field: &str) -> bool {
+    let needle = format!("\"{field}\":");
+    if let Some(start) = json.find(&needle) {
+        let after = json[start + needle.len()..].trim_start();
+        return after.starts_with("true");
+    }
+    false
+}
+
+fn serde_escape_json_string(s: &str) -> String {
+    format!("\"{}\"",
+        s.replace('\\', "\\\\").replace('"', "\\\"")
+         .replace('\n', "\\n").replace('\r', "\\r").replace('\t', "\\t")
+    )
+}
+
+fn parse_query(query: &str) -> HashMap<String, String> {
+    query.split('&')
+        .filter_map(|pair| {
+            let (k, v) = pair.split_once('=')?;
+            Some((url_decode(k), url_decode(v)))
+        })
         .collect()
 }
 
-// ---------------------------------------------------------------------------
-// Main request dispatcher
-// ---------------------------------------------------------------------------
-fn handle(stream: TcpStream, state: &mut ServerState) {
-    let (method, path, query, body) = match parse_request(&stream) {
-        Some(r) => r,
-        None    => return,
-    };
-
-    println!("  {}  {}{}", method, path, if query.is_empty() { String::new() } else { format!("?{query}") });
-
-    // CORS preflight
-    if method == "OPTIONS" {
-        respond(stream, 204, "No Content", "text/plain", b"");
-        return;
-    }
-
-    // ---- API routes --------------------------------------------------------
-    match (method.as_str(), path.as_str()) {
-
-        // Ping
-        ("GET", "/api/ping") => handle_ping(stream),
-
-        // Data store
-        ("GET",  "/api/data") => handle_data_get(stream, &query, state),
-        ("POST", "/api/data") => handle_data_post(stream, &query, &body, state),
-
-        // File read/write
-        ("GET",  "/api/files") => handle_files_get(stream, &query, state),
-        ("POST", "/api/files") => handle_files_post(stream, &body, state),
-
-        // Versions
-        ("GET",    "/api/versions")          => handle_versions_list(stream, state),
-        ("POST",   "/api/versions/snapshot") => handle_versions_snapshot(stream, &query, state),
-        ("POST",   "/api/versions/restore")  => handle_versions_restore(stream, &query, state),
-        ("DELETE", "/api/versions")          => handle_versions_delete(stream, &query, state),
-        ("PATCH",  "/api/versions")          => handle_versions_rename(stream, &query, state),
-
-        // Unlock locked files
-        ("POST", "/api/unlock") => handle_unlock(stream, &body, state),
-
-        // ---- Static files --------------------------------------------------
-        _ => {
-            match resolve_static(&state.root, &path) {
-                Some(file_path) => {
-                    match fs::read(&file_path) {
-                        Ok(bytes) => {
-                            let ext = file_path.extension().and_then(|e| e.to_str()).unwrap_or("");
-                            respond(stream, 200, "OK", mime(ext), &bytes);
-                        }
-                        Err(_) => respond(stream, 500, "Internal Server Error", "text/plain", b"500"),
-                    }
-                }
-                None => respond_404(stream, &path),
+fn url_decode(s: &str) -> String {
+    let mut result = String::with_capacity(s.len());
+    let mut chars = s.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '%' {
+            let h1 = chars.next().unwrap_or('0');
+            let h2 = chars.next().unwrap_or('0');
+            if let Ok(byte) = u8::from_str_radix(&format!("{h1}{h2}"), 16) {
+                result.push(byte as char);
             }
+        } else if c == '+' {
+            result.push(' ');
+        } else {
+            result.push(c);
         }
     }
+    result
 }
 
-// ---------------------------------------------------------------------------
-// main
-// ---------------------------------------------------------------------------
-fn main() {
-    let port: u16 = std::env::args()
-        .nth(1)
-        .and_then(|s| s.parse().ok())
-        .unwrap_or(3000);
+/// RFC 3339 "now" without chrono crate
+fn chrono_now_iso() -> String {
+    use std::time::{SystemTime, UNIX_EPOCH};
+    let secs = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_secs())
+        .unwrap_or(0);
+    // Simple ISO 8601 from unix timestamp (UTC, no DST)
+    let s = secs % 60;
+    let m = (secs / 60) % 60;
+    let h = (secs / 3600) % 24;
+    let days = secs / 86400; // days since 1970-01-01
+    let (y, mo, d) = days_to_ymd(days);
+    format!("{y:04}-{mo:02}-{d:02}T{h:02}:{m:02}:{s:02}Z")
+}
 
-    let root = std::env::current_dir()
-        .expect("Cannot determine current directory");
-
-    let addr = format!("127.0.0.1:{}", port);
-    let listener = TcpListener::bind(&addr)
-        .unwrap_or_else(|e| { eprintln!("Cannot bind {}: {}", addr, e); std::process::exit(1); });
-
-    println!("\n  \u{2713} ChronoFlow server running");
-    println!("  \u{2192} http://localhost:{}", port);
-    println!("  Serving: {}", root.display());
-    println!("  Press Ctrl+C to stop\n");
-
-    let mut state = ServerState::new(root);
-    state.ensure_data_file();
-
-    for incoming in listener.incoming() {
-        match incoming {
-            Ok(stream) => handle(stream, &mut state),
-            Err(e)     => eprintln!("Connection error: {}", e),
-        }
+fn days_to_ymd(mut days: u64) -> (u64, u64, u64) {
+    let mut year = 1970u64;
+    loop {
+        let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+        let days_in_year = if leap { 366 } else { 365 };
+        if days < days_in_year { break; }
+        days -= days_in_year;
+        year += 1;
     }
+    let leap = (year % 4 == 0 && year % 100 != 0) || year % 400 == 0;
+    let month_days = [31, if leap { 29 } else { 28 }, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    let mut month = 0usize;
+    for &md in &month_days {
+        if days < md { break; }
+        days -= md;
+        month += 1;
+    }
+    (year, (month + 1) as u64, days + 1)
 }
