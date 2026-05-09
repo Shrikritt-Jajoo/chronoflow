@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="css/shell.css">
   <link rel="stylesheet" href="css/stats.css">
 </head>
-<body class="stats-body">
+<body class="stats-body" data-page="stats">
   <a href="#main" class="skip-link">Skip to content</a>
 
   <div class="page-bg">
@@ -44,6 +44,7 @@
       <p class="page-subtitle">Your productivity at a glance</p>
     </header>
 
+    <!-- KPI cards -->
     <div class="stats-grid">
       <div class="stat-card">
         <div class="stat-value" id="statTasksDone">—</div>
@@ -63,7 +64,8 @@
       </div>
     </div>
 
-    <div class="panel" style="margin-top:24px">
+    <!-- Weekly focus bar chart -->
+    <div class="panel" style="margin-top:1.5rem">
       <div class="panel-header">
         <span class="panel-title">Weekly Focus (minutes)</span>
       </div>
@@ -72,7 +74,20 @@
       </div>
     </div>
 
-    <div class="panel" style="margin-top:24px">
+    <!-- Energy Insight -->
+    <div class="panel" style="margin-top:1.5rem" id="energyInsightPanel">
+      <div class="panel-header">
+        <span class="panel-title">Energy Insight</span>
+        <span class="panel-hint" id="energyInsightHint"></span>
+      </div>
+      <div class="panel-body">
+        <div class="energy-chart" id="energyChart"></div>
+        <p class="energy-sentence" id="energySentence"></p>
+      </div>
+    </div>
+
+    <!-- Recent sessions -->
+    <div class="panel" style="margin-top:1.5rem">
       <div class="panel-header">
         <span class="panel-title">Recent Sessions</span>
       </div>
@@ -84,12 +99,12 @@
 
   <div class="toast-container" aria-live="polite"></div>
 
-  <script src="js/db.js"></script>
+  <!-- Script load order per AGENTS.md -->
+  <script src="js/app.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/state.js"></script>
+  <script src="js/app-shell.js"></script>
   <script src="js/backgrounds.js"></script>
-  <script src="js/starfield.js"></script>
-  <script src="js/shell.js"></script>
   <script src="js/stats.js"></script>
 </body>
 </html>
