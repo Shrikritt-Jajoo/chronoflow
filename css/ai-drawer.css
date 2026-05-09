@@ -1,0 +1,278 @@
+/* =========================================================
+   ChronoFlow — AI Drawer + Job Cards + Version History
+   ========================================================= */
+
+/* ---- Drawer shell ----------------------------------------------------- */
+.ai-drawer {
+  position: fixed;
+  top: 0;
+  right: 0;
+  width: min(420px, 100vw);
+  height: 100dvh;
+  background: var(--color-bg);
+  border-left: 1px solid var(--color-border);
+  display: flex;
+  flex-direction: column;
+  transform: translateX(100%);
+  transition: transform var(--transition-base);
+  z-index: 300;
+  overflow: hidden;
+}
+.ai-drawer.open {
+  transform: translateX(0);
+  box-shadow: var(--shadow-lg);
+}
+.ai-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  backdrop-filter: blur(2px);
+  z-index: 299;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--transition-base);
+}
+.ai-drawer-backdrop.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ---- Drawer header ---------------------------------------------------- */
+.ai-drawer-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-bottom: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.ai-drawer-title {
+  font-size: var(--text-base);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  flex: 1;
+}
+.ai-drawer-phase {
+  font-size: var(--text-xs);
+  color: var(--color-accent-cyan);
+  background: rgba(116, 240, 211, 0.08);
+  padding: 2px 8px;
+  border-radius: var(--radius-full);
+}
+.ai-drawer-close {
+  color: var(--color-text-muted);
+  flex-shrink: 0;
+}
+
+/* ---- Messages --------------------------------------------------------- */
+.ai-drawer-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-md) var(--space-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  scroll-behavior: smooth;
+}
+.ai-message {
+  max-width: 85%;
+  padding: var(--space-sm) var(--space-md);
+  border-radius: var(--radius-lg);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.ai-message-user {
+  align-self: flex-end;
+  background: rgba(116, 240, 211, 0.12);
+  border: 1px solid rgba(116, 240, 211, 0.2);
+  color: var(--color-text);
+}
+.ai-message-model {
+  align-self: flex-start;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+}
+.ai-message-system {
+  align-self: center;
+  background: transparent;
+  border: none;
+  color: var(--color-text-muted);
+  font-size: var(--text-xs);
+  padding: var(--space-xs) 0;
+}
+
+/* ---- Thinking dots ---------------------------------------------------- */
+.ai-thinking {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 10px 14px;
+}
+.ai-thinking span {
+  width: 6px;
+  height: 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-accent-cyan);
+  animation: ai-bounce 1.2s infinite;
+}
+.ai-thinking span:nth-child(2) { animation-delay: 0.2s; }
+.ai-thinking span:nth-child(3) { animation-delay: 0.4s; }
+@keyframes ai-bounce {
+  0%, 80%, 100% { transform: translateY(0);    opacity: 0.4; }
+  40%           { transform: translateY(-6px); opacity: 1;   }
+}
+
+/* ---- Plan panel ------------------------------------------------------- */
+.ai-plan-panel {
+  flex-shrink: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+}
+.ai-plan-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  margin-bottom: var(--space-sm);
+}
+.ai-plan-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+  margin-bottom: var(--space-md);
+  max-height: 200px;
+  overflow-y: auto;
+}
+.ai-plan-step {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-sm);
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  line-height: 1.4;
+}
+.ai-plan-step input[type=checkbox] {
+  flex-shrink: 0;
+  margin-top: 2px;
+  accent-color: var(--color-accent-cyan);
+}
+.ai-plan-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+/* ---- Result panel ----------------------------------------------------- */
+.ai-result-panel {
+  flex-shrink: 0;
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  background: var(--color-bg-panel);
+}
+.ai-result-description {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  margin-bottom: var(--space-md);
+  line-height: 1.5;
+}
+.ai-result-actions {
+  display: flex;
+  gap: var(--space-sm);
+  justify-content: flex-end;
+}
+
+/* ---- Chat input row --------------------------------------------------- */
+.ai-drawer-input-row {
+  display: flex;
+  gap: var(--space-sm);
+  padding: var(--space-md) var(--space-lg);
+  border-top: 1px solid var(--color-border);
+  flex-shrink: 0;
+}
+.ai-drawer-input {
+  flex: 1;
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  transition: border-color var(--transition-fast);
+}
+.ai-drawer-input:focus {
+  border-color: var(--color-accent-cyan);
+}
+.ai-send-btn {
+  flex-shrink: 0;
+}
+
+/* ---- AI Job cards ----------------------------------------------------- */
+.ai-job-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+}
+.ai-job-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-sm) var(--space-md);
+  transition: border-color var(--transition-fast);
+}
+.ai-job-card:hover {
+  border-color: var(--color-border-strong);
+}
+.ai-job-info { flex: 1; }
+.ai-job-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text);
+  margin-bottom: 4px;
+}
+.ai-job-meta {
+  display: flex;
+  gap: var(--space-xs);
+  flex-wrap: wrap;
+}
+
+/* ---- Version history -------------------------------------------------- */
+.ai-versions-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+.ai-version-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+  padding: var(--space-sm) var(--space-md);
+  background: var(--color-bg-card);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+}
+.ai-version-info { flex: 1; }
+.ai-version-name {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  font-weight: var(--font-weight-medium);
+}
+.ai-version-date {
+  font-size: var(--text-xs);
+  color: var(--color-text-muted);
+  margin-top: 2px;
+}
+
+/* ---- Hint text -------------------------------------------------------- */
+.settings-hint {
+  color: var(--color-text-muted);
+  font-size: var(--text-sm);
+  margin-bottom: 1.5rem;
+  line-height: 1.6;
+}

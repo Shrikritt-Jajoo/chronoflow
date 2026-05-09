@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="css/shell.css">
   <link rel="stylesheet" href="css/settings.css">
 </head>
-<body class="settings-body">
+<body class="settings-body" data-page="settings">
   <a href="#main" class="skip-link">Skip to content</a>
 
   <div class="page-bg">
@@ -92,15 +92,59 @@
     </div>
   </main>
 
+  <!-- AI Conversation Drawer -->
+  <aside class="ai-drawer" id="aiDrawer" aria-hidden="true">
+    <div class="ai-drawer-header">
+      <div class="ai-drawer-title" id="aiDrawerTitle">AI Assistant</div>
+      <div class="ai-drawer-phase" id="aiDrawerPhase"></div>
+      <button class="btn-icon ai-drawer-close" id="aiDrawerClose" aria-label="Close">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
+    </div>
+    <div class="ai-drawer-messages" id="aiDrawerMessages"></div>
+
+    <!-- Phase 2: plan approval -->
+    <div class="ai-plan-panel" id="aiPlanPanel" style="display:none">
+      <div class="ai-plan-title">Implementation Plan</div>
+      <div class="ai-plan-steps" id="aiPlanSteps"></div>
+      <div class="ai-plan-actions">
+        <button class="btn btn-ghost" id="aiPlanCancel">Cancel</button>
+        <button class="btn btn-primary" id="aiPlanApprove">Approve &amp; Start</button>
+      </div>
+    </div>
+
+    <!-- Phase 3: accept/reject results -->
+    <div class="ai-result-panel" id="aiResultPanel" style="display:none">
+      <div class="ai-result-description" id="aiResultDescription"></div>
+      <div class="ai-result-actions">
+        <button class="btn btn-ghost" id="aiResultReject">Skip</button>
+        <button class="btn btn-primary" id="aiResultAccept">Apply</button>
+      </div>
+    </div>
+
+    <!-- Chat input -->
+    <form class="ai-drawer-input-row" id="aiChatForm">
+      <input type="text" class="ai-drawer-input" id="aiChatInput"
+             placeholder="Ask me anything about your tasks…" autocomplete="off">
+      <button type="submit" class="btn btn-primary ai-send-btn" id="aiSendBtn">Send</button>
+    </form>
+  </aside>
+  <div class="ai-drawer-backdrop" id="aiDrawerBackdrop"></div>
+
   <div class="toast-container" aria-live="polite"></div>
 
-  <script src="js/db.js"></script>
+  <!-- Script load order per AGENTS.md -->
+  <script src="js/app.js"></script>
   <script src="js/utils.js"></script>
   <script src="js/state.js"></script>
+  <script src="js/app-shell.js"></script>
   <script src="js/backgrounds.js"></script>
-  <script src="js/starfield.js"></script>
-  <script src="js/shell.js"></script>
   <script src="js/ai.js"></script>
+  <script src="js/ai-jobs/goal-decomposition.js"></script>
+  <script src="js/ai-jobs/task-critique.js"></script>
+  <script src="js/ai-jobs/daily-email.js"></script>
+  <script src="js/ai-jobs/backlog-cleanup.js"></script>
+  <script src="js/ai-jobs/weekly-review.js"></script>
   <script src="js/gmail.js"></script>
   <script src="js/settings.js"></script>
 </body>
