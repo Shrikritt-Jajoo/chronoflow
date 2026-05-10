@@ -1,4 +1,4 @@
-/* ────────────────────────────────────────────────────────
+/* =====================================================
    ChronoFlow Home Page
    ===================================================== */
 
@@ -27,7 +27,7 @@
   user-select: none;
 }
 
-/* focus timer replaces clock */
+/* Focus timer replaces clock — coloured accent, same huge size */
 .focus-timer-center {
   font-size: clamp(5rem, 13.5vw, 10.8rem);
   font-weight: 260; letter-spacing: .22em;
@@ -38,6 +38,8 @@
   cursor: default;
 }
 .focus-timer-center.paused { opacity: .55; }
+
+/* Controls that appear on hover over clock-wrap during focus */
 .focus-ctrl-hover {
   display: flex; gap: var(--sp3);
   opacity: 0;
@@ -48,9 +50,11 @@
   opacity: 1;
   pointer-events: auto;
 }
-.hidden { display: none !important; }
 
-/* ── Bottom-right block ── */
+/* ── Bottom-right task block ──
+   JS adds/removes .show; opacity:0 default keeps it invisible at rest.
+   The parent .ui has pointer-events:none so zero-opacity elements
+   never accidentally swallow clicks. ── */
 .br-block {
   position: absolute; right: 28px; bottom: 28px;
   display: flex; flex-direction: column;
@@ -58,7 +62,7 @@
   opacity: 0; transition: opacity var(--t-slow);
   z-index: 7;
 }
-.br-block.show  { opacity: 1; }
+.br-block.show { opacity: 1; }
 .br-task-name {
   font-size: 13px; color: var(--text);
   text-align: right; max-width: 280px;
@@ -69,7 +73,8 @@
   text-transform: uppercase; color: var(--text-muted);
 }
 
-/* ── Subtask strip ── */
+/* ── Subtask strip (bottom-centre) ──
+   Same opacity-toggle pattern as br-block. ── */
 .strip {
   position: absolute; left: 50%; bottom: 28px;
   transform: translateX(-50%);
@@ -78,8 +83,8 @@
   opacity: 0; transition: opacity var(--t-slow);
   z-index: 7;
 }
-.strip.show      { opacity: 1; }
-.strip-meta      { flex: 1; min-width: 0; }
-.strip-sub       { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
-.strip-step      { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.step-arrow      { font-size: 20px; padding: 4px 12px; }
+.strip.show   { opacity: 1; }
+.strip-meta   { flex: 1; min-width: 0; }
+.strip-sub    { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+.strip-step   { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-arrow   { font-size: 20px; padding: 4px 12px; }

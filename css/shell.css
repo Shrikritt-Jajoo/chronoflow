@@ -1,10 +1,13 @@
-/* ────────────────────────────────────────────────────────
+/* =====================================================
    ChronoFlow Shell — shared chrome across all pages
    ===================================================== */
 
-/* ── UI wrapper ── */
+/* ── UI wrapper (home page only) ── */
 .ui { position: fixed; inset: 0; z-index: 6; pointer-events: none; }
 .ui * { pointer-events: auto; }
+
+/* ── Utility ── */
+.hidden { display: none !important; }
 
 /* ── Angular button ── */
 .abtn {
@@ -25,7 +28,7 @@
 .abtn.sm     { padding: 7px 13px; font-size: 10px; }
 .abtn.danger:hover { background: #ff6b6b; color: #000; }
 
-/* ── Nav (home page — inside .ui, fades in/out) ── */
+/* ── Nav (home page — inside .ui, auto-hides) ── */
 .nav {
   position: absolute;
   top: 22px; left: 50%;
@@ -33,17 +36,27 @@
   display: flex; gap: 6px; padding: 8px;
   background: transparent;
   opacity: 0;
+  pointer-events: none;              /* invisible = non-interactive */
   transition: opacity var(--t-slow), transform var(--t-slow);
   z-index: 7;
 }
-.nav.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+.nav.show {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+  pointer-events: auto;              /* shown = interactive */
+}
 
-/* ── Edge blur masks (home only) ── */
+/* ── Edge blur masks (home only, toggled by .show-masks on .ui) ──
+   These create the frosted-glass effect that makes the nav bar and
+   bottom task strip readable against the animated starfield.
+   Blur is always present in the layer but the mask-image clips it
+   to a feathered gradient so it looks seamless. ── */
 .mask-top, .mask-bottom, .mask-br {
   position: absolute;
   pointer-events: none;
   z-index: 5;
   opacity: 0;
+  will-change: opacity;              /* prevents Chromium blur-at-opacity-0 glitch */
   transition: opacity var(--t-mask);
 }
 .show-masks .mask-top,
@@ -52,7 +65,10 @@
 
 .mask-top {
   top: 0; left: 0; right: 0; height: 110px;
-  background: linear-gradient(to bottom, rgba(0,0,0,.52) 0%, rgba(0,0,0,.30) 45%, rgba(0,0,0,0) 100%);
+  background: linear-gradient(to bottom,
+    rgba(0,0,0,.52) 0%,
+    rgba(0,0,0,.30) 45%,
+    rgba(0,0,0,0)  100%);
   backdrop-filter: blur(9px) brightness(.72);
   -webkit-backdrop-filter: blur(9px) brightness(.72);
   mask-image: linear-gradient(to bottom, black 0%, black 48%, transparent 100%);
@@ -60,7 +76,10 @@
 }
 .mask-bottom {
   bottom: 0; left: 0; right: 0; height: 120px;
-  background: linear-gradient(to top, rgba(0,0,0,.52) 0%, rgba(0,0,0,.28) 46%, rgba(0,0,0,0) 100%);
+  background: linear-gradient(to top,
+    rgba(0,0,0,.52) 0%,
+    rgba(0,0,0,.28) 46%,
+    rgba(0,0,0,0)  100%);
   backdrop-filter: blur(9px) brightness(.72);
   -webkit-backdrop-filter: blur(9px) brightness(.72);
   mask-image: linear-gradient(to top, black 0%, black 48%, transparent 100%);
@@ -68,7 +87,10 @@
 }
 .mask-br {
   bottom: 0; right: 0; width: 360px; height: 150px;
-  background: radial-gradient(ellipse at 100% 100%, rgba(0,0,0,.54) 0%, rgba(0,0,0,.28) 46%, rgba(0,0,0,0) 72%);
+  background: radial-gradient(ellipse at 100% 100%,
+    rgba(0,0,0,.54) 0%,
+    rgba(0,0,0,.28) 46%,
+    rgba(0,0,0,0)  72%);
   backdrop-filter: blur(8px) brightness(.74);
   -webkit-backdrop-filter: blur(8px) brightness(.74);
   mask-image: radial-gradient(ellipse at 100% 100%, black 0%, black 46%, transparent 72%);
@@ -112,12 +134,12 @@
   clip-path: var(--clip);
   display: flex; flex-direction: column; gap: var(--sp5);
 }
-.confirm-msg    { font-size: 14px; line-height: 1.5; color: var(--text); }
+.confirm-msg     { font-size: 14px; line-height: 1.5; color: var(--text); }
 .confirm-actions { display: flex; gap: var(--sp3); justify-content: flex-end; }
 
 /* ── Progress bar shared ── */
 .prog-track { height: 2px; background: var(--progress-track); }
-.prog-fill   { height: 100%; background: var(--accent); transition: var(--t-prog); }
+.prog-fill  { height: 100%; background: var(--accent); transition: var(--t-prog); }
 
 /* ── Section label ── */
 .lbl {
@@ -158,9 +180,9 @@
   font-size: 14px; color: var(--text);
   transition: border-color var(--t-base);
 }
-.onb-input:focus       { border-bottom-color: var(--accent); }
+.onb-input:focus        { border-bottom-color: var(--accent); }
 .onb-input::placeholder { color: var(--text-faint); }
-.onb-dots  { display: flex; gap: 8px; }
+.onb-dots { display: flex; gap: 8px; }
 .onb-dot {
   width: 6px; height: 6px;
   border-radius: 50%;
@@ -173,7 +195,7 @@
 .onb-skip:hover   { color: var(--text-muted); }
 
 /* energy dot row */
-.energy-row       { display: flex; gap: 8px; align-items: center; margin-top: var(--sp2); }
+.energy-row { display: flex; gap: 8px; align-items: center; margin-top: var(--sp2); }
 .e-dot {
   width: 10px; height: 10px; border-radius: 50%;
   background: rgba(245,247,251,.18);

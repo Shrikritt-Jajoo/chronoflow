@@ -1,7 +1,8 @@
-/* starfield canvas sits behind everything */
+/* Starfield canvas — must sit below grain (.z-index 1) and all UI (z-index 6+) */
 #starCanvas {
   position: fixed;
   inset: 0;
-  z-index: 0;
+  z-index: -1;   /* below grain and .ui, above body background */
   display: block;
+  /* width/height are set programmatically by starfield.js resize() */
 }
