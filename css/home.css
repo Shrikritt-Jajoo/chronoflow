@@ -1,58 +1,85 @@
-/* =========================================================
+/* ────────────────────────────────────────────────────────
    ChronoFlow Home Page
-   ========================================================= */
-.home-body { overflow: hidden; }
-.home-content {
-  position: relative; z-index: 10;
-  min-height: 100vh; display: flex; flex-direction: column;
-  align-items: center; justify-content: center;
-  padding: var(--space-16) var(--space-6); gap: var(--space-6);
+   ===================================================== */
+
+/* ── Clock & timer zone ── */
+.clock-wrap {
+  position: absolute; top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex; flex-direction: column;
+  align-items: center; gap: 12px;
+  text-align: center;
+  z-index: 7;
 }
-.clock-display {
-  font-family: var(--font-display); font-size: var(--text-hero);
-  font-weight: 700; line-height: 0.9; letter-spacing: -0.02em;
-  color: var(--color-text); text-shadow: 0 0 60px rgba(140,166,255,0.1);
-  text-align: center; font-variant-numeric: tabular-nums;
+.time-display {
+  font-size: clamp(5rem, 13.5vw, 10.8rem);
+  font-weight: 260;
+  letter-spacing: .22em;
+  line-height: .9;
+  margin-left: .22em;
+  transition: opacity var(--t-slow);
+  user-select: none;
 }
-.clock-date {
-  margin-top: var(--space-4); font-size: var(--text-lg);
-  color: var(--color-text-muted); letter-spacing: 0.06em;
-  text-transform: uppercase; text-align: center;
+.date-display {
+  font-size: 12px; letter-spacing: .34em;
+  text-transform: uppercase; color: var(--text-muted);
+  transition: opacity var(--t-slow);
+  user-select: none;
 }
-.clock-greeting { font-size: var(--text-sm); color: var(--color-text-faint); text-align: center; }
-.home-metrics {
-  display: flex; gap: var(--space-6);
-  background: var(--color-surface-glass);
-  backdrop-filter: blur(16px); -webkit-backdrop-filter: blur(16px);
-  border: 1px solid var(--color-border); border-radius: var(--radius-xl);
-  padding: var(--space-5) var(--space-8); margin-top: var(--space-6);
+
+/* focus timer replaces clock */
+.focus-timer-center {
+  font-size: clamp(5rem, 13.5vw, 10.8rem);
+  font-weight: 260; letter-spacing: .22em;
+  line-height: .9; margin-left: .22em;
+  color: var(--accent);
+  transition: opacity var(--t-slow);
+  user-select: none;
+  cursor: default;
 }
-.home-metric { display: flex; flex-direction: column; align-items: center; gap: var(--space-1); }
-.home-metric-value {
-  font-family: var(--font-display); font-size: var(--text-xl);
-  font-weight: 700; color: var(--color-accent-cyan); text-shadow: var(--glow-cyan);
+.focus-timer-center.paused { opacity: .55; }
+.focus-ctrl-hover {
+  display: flex; gap: var(--sp3);
+  opacity: 0;
+  transition: opacity var(--t-slow);
+  pointer-events: none;
 }
-.home-metric-label {
-  font-size: var(--text-xs); color: var(--color-text-faint);
-  text-transform: uppercase; letter-spacing: 0.08em;
+.clock-wrap:hover .focus-ctrl-hover {
+  opacity: 1;
+  pointer-events: auto;
 }
-.home-actions {
-  position: fixed; bottom: var(--space-8); left: 50%; transform: translateX(-50%);
-  z-index: 20; display: flex; gap: var(--space-3);
-  opacity: 0; transition: opacity var(--transition-slow); pointer-events: none;
+.hidden { display: none !important; }
+
+/* ── Bottom-right block ── */
+.br-block {
+  position: absolute; right: 28px; bottom: 28px;
+  display: flex; flex-direction: column;
+  gap: 10px; align-items: flex-end;
+  opacity: 0; transition: opacity var(--t-slow);
+  z-index: 7;
 }
-.home-actions.visible { opacity: 1; pointer-events: auto; }
-.home-action-btn {
-  min-height: 44px; padding: var(--space-3) var(--space-5);
-  border-radius: var(--radius-full);
-  background: var(--color-surface-glass);
-  backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
-  border: 1px solid var(--color-border); color: var(--color-text-muted);
-  font-size: var(--text-sm); font-weight: 500; transition: all var(--transition-fast);
-  display: inline-flex; align-items: center;
+.br-block.show  { opacity: 1; }
+.br-task-name {
+  font-size: 13px; color: var(--text);
+  text-align: right; max-width: 280px;
 }
-.home-action-btn:hover { background: var(--color-surface-2); border-color: var(--color-border-hover); color: var(--color-text); }
-@media (max-width: 640px) {
-  .home-metrics { flex-direction: column; gap: var(--space-4); padding: var(--space-5); }
-  .home-actions { flex-direction: column; width: calc(100% - 2rem); }
+.br-prog  { width: 200px; }
+.br-timer {
+  font-size: 11px; letter-spacing: .18em;
+  text-transform: uppercase; color: var(--text-muted);
 }
+
+/* ── Subtask strip ── */
+.strip {
+  position: absolute; left: 50%; bottom: 28px;
+  transform: translateX(-50%);
+  display: flex; align-items: center; gap: 10px;
+  min-width: 520px; max-width: 700px;
+  opacity: 0; transition: opacity var(--t-slow);
+  z-index: 7;
+}
+.strip.show      { opacity: 1; }
+.strip-meta      { flex: 1; min-width: 0; }
+.strip-sub       { font-size: 11px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+.strip-step      { font-size: 13px; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-arrow      { font-size: 20px; padding: 4px 12px; }

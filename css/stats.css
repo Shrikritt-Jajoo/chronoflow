@@ -1,185 +1,41 @@
-/* =========================================================
-   ChronoFlow — Stats Page
-   KPI cards, weekly chart, Energy Insight, session rows
-   ========================================================= */
+/* ────────────────────────────────────────────────────────
+   ChronoFlow Stats Page
+   ===================================================== */
 
-.stats-body   { background: var(--color-bg); min-height: 100dvh; }
-.stats-shell  { max-width: 900px; margin: 0 auto; padding: 6rem var(--space-lg) var(--space-2xl); }
+body.stats-page { overflow: auto; height: auto; min-height: 100vh; }
 
-/* ---- KPI grid -------------------------------------------------------- */
+.stats-nav {
+  position: fixed; top: 22px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 6px;
+  z-index: 10;
+}
+
+.stats-layout {
+  position: relative; z-index: 7;
+  padding: 80px var(--sp8) var(--sp8);
+  max-width: 860px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: var(--sp8);
+}
+.stats-section-title { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--text-muted); }
+
 .stats-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--space-md);
+  display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--sp5);
 }
-.stat-card {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  padding: var(--space-lg);
-  text-align: center;
-  transition: border-color var(--transition-fast);
+.metric-card {
+  padding: var(--sp6);
+  background: rgba(255,255,255,.025);
+  clip-path: var(--clip);
+  display: flex; flex-direction: column; gap: var(--sp3);
 }
-.stat-card:hover { border-color: var(--color-border-strong); }
-.stat-value {
-  font-size: var(--text-3xl);
-  font-weight: var(--font-weight-bold);
-  color: var(--color-accent-cyan);
-  line-height: 1;
-  margin-bottom: var(--space-xs);
-}
-.stat-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
+.metric-val { font-size: clamp(1.8rem, 4vw, 2.8rem); font-weight: 260; letter-spacing: .12em; color: var(--accent); }
+.metric-lbl { font-size: 10px; letter-spacing: .22em; text-transform: uppercase; color: var(--text-muted); }
 
-/* ---- Panel shell ----------------------------------------------------- */
-.panel {
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-lg);
-  overflow: hidden;
-}
-.panel-header {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  padding: var(--space-md) var(--space-lg);
-  border-bottom: 1px solid var(--color-border);
-}
-.panel-hint {
-  margin-left: auto;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-}
-.panel-body { padding: var(--space-lg); }
+.chart-box  { width: 100%; height: 180px; }
 
-/* ---- Weekly chart ---------------------------------------------------- */
-.weekly-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-sm);
-  height: 120px;
+.streak-dots { display: flex; gap: 10px; margin-top: var(--sp3); }
+.s-dot {
+  width: 10px; height: 10px; border-radius: 50%;
+  background: rgba(245,247,251,.14);
 }
-.weekly-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-}
-.weekly-bar-wrap {
-  flex: 1;
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.weekly-bar {
-  width: 70%;
-  min-height: 3px;
-  background: rgba(116, 240, 211, 0.3);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  transition: height var(--transition-base);
-}
-.weekly-bar--today {
-  background: var(--color-accent-cyan);
-  box-shadow: var(--glow-cyan);
-}
-.weekly-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  margin-top: var(--space-xs);
-}
-.weekly-value {
-  font-size: var(--text-xs);
-  color: var(--color-text-faint);
-  min-height: 1rem;
-}
-
-/* ---- Energy Insight chart -------------------------------------------- */
-.energy-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: var(--space-sm);
-  height: 160px;
-  margin-bottom: var(--space-md);
-}
-.energy-col {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  height: 100%;
-}
-.energy-avg-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  min-height: 1.2rem;
-  text-align: center;
-}
-.energy-bar-wrap {
-  flex: 1;
-  width: 100%;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-}
-.energy-bar {
-  width: 60%;
-  min-height: 3px;
-  background: rgba(167, 139, 250, 0.3);
-  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
-  transition: height var(--transition-slow), background var(--transition-base);
-  cursor: default;
-}
-.energy-bar--peak {
-  background: var(--color-accent-violet);
-  box-shadow: var(--glow-violet);
-}
-.energy-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  margin-top: var(--space-xs);
-  text-align: center;
-  white-space: nowrap;
-}
-.energy-count {
-  font-size: 10px;
-  color: var(--color-text-faint);
-  min-height: 1rem;
-  text-align: center;
-}
-.energy-sentence {
-  font-size: var(--text-sm);
-  color: var(--color-text);
-  line-height: 1.6;
-  margin-top: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
-  background: rgba(167, 139, 250, 0.06);
-  border-left: 3px solid var(--color-accent-violet);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-}
-
-/* ---- Recent sessions ------------------------------------------------- */
-.session-row {
-  padding: var(--space-sm) 0;
-  border-bottom: 1px solid var(--color-border);
-}
-.session-row:last-child { border-bottom: none; }
-.session-title {
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
-  margin-bottom: 4px;
-}
-.session-meta {
-  display: flex;
-  gap: var(--space-md);
-  align-items: center;
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  flex-wrap: wrap;
-}
+.s-dot.filled { background: var(--accent); }

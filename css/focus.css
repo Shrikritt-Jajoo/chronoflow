@@ -1,34 +1,53 @@
-/* =========================================================
+/* ────────────────────────────────────────────────────────
    ChronoFlow Focus Page
-   ========================================================= */
-.focus-body { padding-top: var(--nav-height); min-height: 100vh; position: relative; overflow-y: auto; }
-.focus-shell {
-  position: relative; z-index: 10;
-  min-height: calc(100vh - var(--nav-height));
+   ===================================================== */
+
+body.focus-page { overflow: hidden; }
+
+.focus-overlay {
+  position: fixed; inset: 0;
+  display: flex; flex-direction: column;
+  align-items: center; justify-content: center;
+  gap: var(--sp5); z-index: 7;
+}
+.focus-task-title  { font-size: 18px; letter-spacing: .08em; color: var(--text); }
+.focus-step-text   { font-size: 14px; color: var(--text-muted); max-width: 520px; text-align: center; line-height: 1.6; }
+.focus-timer-big {
+  font-size: clamp(5rem, 13.5vw, 10.8rem);
+  font-weight: 260; letter-spacing: .22em;
+  color: var(--accent); line-height: .9;
+  margin-left: .22em;
+}
+.focus-timer-big.paused { opacity: .55; }
+.focus-prog-wrap  { width: min(400px, 80vw); }
+.focus-controls   { display: flex; gap: var(--sp4); margin-top: var(--sp3); }
+
+/* Post-session modal */
+.session-modal-overlay {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex; align-items: center; justify-content: center;
-  padding: var(--space-8) var(--space-6);
+  z-index: 400;
 }
-.focus-card {
-  background: var(--color-surface-glass);
-  backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--color-border); border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-lg);
-  padding: var(--space-10) var(--space-12);
-  width: min(100%, 560px);
-  display: flex; flex-direction: column; align-items: center; gap: var(--space-6);
+.session-modal {
+  width: min(440px, 90vw);
+  padding: var(--sp8);
+  background: rgba(8,8,8,.96);
+  clip-path: var(--clip);
+  display: flex; flex-direction: column; gap: var(--sp5);
 }
-.focus-label { font-size: var(--text-xs); text-transform: uppercase; letter-spacing: 0.1em; color: var(--color-text-faint); margin-bottom: var(--space-2); }
-.focus-task-selector { width: 100%; }
-.focus-select { width: 100%; background: var(--color-surface-2); border: 1px solid var(--color-border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4); color: var(--color-text); font-size: var(--text-sm); }
-.focus-timer-display {
-  font-family: var(--font-display); font-size: clamp(3.5rem,12vw,6rem);
-  font-weight: 700; color: var(--color-accent-cyan); text-shadow: var(--glow-cyan);
-  letter-spacing: 0.04em; font-variant-numeric: tabular-nums;
+.sm-title    { font-size: 16px; letter-spacing: .14em; text-transform: uppercase; }
+.sm-sub      { font-size: 13px; color: var(--text-muted); }
+.sm-label    { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-muted); }
+.sm-range    { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.sm-range-val { font-size: 13px; color: var(--accent); }
+.sm-notes {
+  background: transparent; border: none;
+  border-bottom: 1px solid rgba(245,247,251,.14);
+  color: var(--text); font-size: 13px;
+  padding: var(--sp2) 0; resize: none; width: 100%;
 }
-.focus-progress-wrap { width: 100%; }
-.focus-mode-row { display: flex; flex-wrap: wrap; gap: var(--space-2); justify-content: center; }
-.focus-mode-btn.active { background: var(--color-accent-cyan-dim); border-color: rgba(116,240,211,0.3); color: var(--color-accent-cyan); }
-.focus-controls { display: flex; gap: var(--space-4); justify-content: center; }
-.focus-wake-row { display: flex; align-items: center; gap: var(--space-3); }
-.focus-wake-status { font-size: var(--text-xs); color: var(--color-text-faint); }
-@media (max-width: 640px) { .focus-card { padding: var(--space-8) var(--space-5); } }
+.sm-notes:focus { border-bottom-color: var(--accent); }
+.sm-actions  { display: flex; gap: var(--sp3); justify-content: flex-end; }

@@ -1,114 +1,167 @@
-/* =========================================================
-   ChronoFlow — Planner Page
-   Tasks, slots, schedule
-   ========================================================= */
+/* ────────────────────────────────────────────────────────
+   ChronoFlow Planner Page
+   ===================================================== */
 
-.planner-body  { background: var(--color-bg); min-height: 100dvh; }
-.planner-shell { max-width: 960px; margin: 0 auto; padding: 6rem var(--space-lg) var(--space-2xl); }
-
-/* ---- Task sort row --------------------------------------------------- */
-.task-sort-row {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-}
-.task-sort-label {
-  font-size: var(--text-xs);
-  color: var(--color-text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  white-space: nowrap;
-}
-.task-sort-select {
-  font-size: var(--text-xs);
-  background: var(--color-bg-elevated);
-  border: 1px solid var(--color-border);
-  color: var(--color-text);
-  border-radius: var(--radius-sm);
-  padding: 0.25rem 0.5rem;
-  cursor: pointer;
+body.planner-page {
+  overflow: auto;
+  height: auto;
+  min-height: 100vh;
 }
 
-/* ---- Task cards ------------------------------------------------------ */
+/* Fixed nav on planner */
+.planner-nav {
+  position: fixed; top: 22px; left: 50%;
+  transform: translateX(-50%);
+  display: flex; gap: 6px;
+  z-index: 10;
+}
+
+/* ── Three-column layout ── */
+.planner-layout {
+  display: grid;
+  grid-template-columns: 280px 1fr 340px;
+  gap: var(--sp6);
+  padding: 80px var(--sp6) var(--sp6);
+  min-height: 100vh;
+  position: relative; z-index: 7;
+}
+
+/* ── Sidebar / Panel shared ── */
+.panel { display: flex; flex-direction: column; gap: var(--sp5); }
+.section-head {
+  font-size: 10px; letter-spacing: .22em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin-bottom: var(--sp2);
+}
+
+/* ── Quick capture ── */
+.quick-form { display: flex; gap: var(--sp2); }
+.q-input {
+  flex: 1; background: transparent; border: none;
+  border-bottom: 1px solid rgba(245,247,251,.14);
+  color: var(--text); font-size: 13px;
+  padding: var(--sp2) 0;
+  transition: border-color var(--t-base);
+}
+.q-input:focus       { border-bottom-color: var(--accent); }
+.q-input::placeholder { color: var(--text-faint); }
+
+/* ── Task card ── */
 .task-card {
-  display: flex;
-  align-items: center;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-sm);
-  transition: border-color var(--transition-fast), opacity var(--transition-base);
+  padding: var(--sp4);
+  background: transparent;
+  clip-path: var(--clip);
+  transition: background var(--t-base);
+  cursor: default;
+  border-left: 1px solid rgba(245,247,251,.06);
 }
-.task-card:hover { border-color: var(--color-border-strong); }
+.task-card:hover    { background: rgba(255,255,255,.03); }
+.task-card.selected { background: rgba(191,174,153,.06); border-left-color: var(--accent); }
+.task-card + .task-card { margin-top: var(--sp3); }
+.tc-title  { font-size: 13px; font-weight: 500; margin-bottom: var(--sp2); }
+.tc-tags   { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: var(--sp3); }
+.tag {
+  font-size: 10px; letter-spacing: .14em; text-transform: uppercase;
+  color: var(--text-muted); padding: 3px 7px;
+  clip-path: var(--clip);
+  background: rgba(255,255,255,.05);
+}
+.tag.accent { background: rgba(191,174,153,.14); color: var(--accent); }
+.tag.warn   { background: rgba(255,107,107,.12);  color: #ff9090; }
+.tc-prog    { width: 100%; margin-bottom: var(--sp3); }
+.tc-actions { display: flex; gap: var(--sp2); }
 
-/* Fix 5: completed task visual treatment */
-.task-card.done {
-  opacity: 0.4;
+/* ── Detail panel ── */
+.detail-panel { display: flex; flex-direction: column; gap: var(--sp5); }
+.dp-empty     { font-size: 13px; color: var(--text-faint); padding-top: var(--sp8); }
+.form-row     { display: flex; gap: var(--sp4); }
+.form-row .form-group { flex: 1; }
+.form-group   { display: flex; flex-direction: column; gap: var(--sp2); }
+.form-group label { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--text-muted); }
+.form-group input,
+.form-group select,
+.form-group textarea {
+  background: transparent; border: none;
+  border-bottom: 1px solid rgba(245,247,251,.14);
+  color: var(--text); font-size: 13px;
+  padding: var(--sp2) 0;
+  transition: border-color var(--t-base);
 }
-.task-card.done .task-card-title {
-  text-decoration: line-through;
-  color: var(--color-text-muted);
-}
+.form-group input:focus,
+.form-group select:focus,
+.form-group textarea:focus { border-bottom-color: var(--accent); }
+.form-group select option   { background: #111; }
+.form-group textarea        { resize: vertical; min-height: 60px; }
+.form-actions { display: flex; gap: var(--sp3); flex-wrap: wrap; padding-top: var(--sp3); }
 
-.task-card-title {
-  font-size: var(--text-sm);
-  font-weight: var(--font-weight-medium);
-  color: var(--color-text);
-  margin-bottom: var(--space-xs);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* ── Subtask editor ── */
+.st-list    { display: flex; flex-direction: column; gap: var(--sp3); }
+.st-item    { display: flex; flex-direction: column; }
+.st-header  {
+  display: flex; align-items: center; gap: var(--sp3);
+  padding: var(--sp3) 0; cursor: pointer;
 }
-.task-card-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-xs);
-  align-items: center;
+.st-title-input {
+  flex: 1; background: transparent; border: none;
+  border-bottom: 1px solid rgba(245,247,251,.10);
+  color: var(--text); font-size: 13px; padding: var(--sp1) 0;
 }
-.task-card-actions {
-  display: flex;
-  gap: var(--space-xs);
-  flex-shrink: 0;
+.st-title-input:focus { border-bottom-color: var(--accent); }
+.st-progress { font-size: 10px; color: var(--text-faint); letter-spacing: .12em; white-space: nowrap; }
+.st-del      { font-size: 14px; color: var(--text-faint); background: none; border: none; cursor: pointer; }
+.st-del:hover { color: #ff9090; }
+.st-steps   { display: flex; flex-direction: column; gap: var(--sp2); padding: var(--sp3) 0 var(--sp2) var(--sp5); }
+.step-row   { display: flex; align-items: center; gap: var(--sp2); }
+.step-row.current-step .step-input { color: var(--accent); }
+.step-num   { font-size: 10px; color: var(--text-faint); min-width: 18px; letter-spacing: .1em; }
+.step-input {
+  flex: 1; background: transparent; border: none;
+  border-bottom: 1px solid rgba(245,247,251,.08);
+  color: var(--text); font-size: 13px; padding: var(--sp1) 0;
 }
+.step-input:focus { border-bottom-color: var(--accent); }
+.step-del   { font-size: 12px; color: var(--text-faint); background: none; border: none; cursor: pointer; }
+.step-del:hover { color: #ff9090; }
+.st-add-step {
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--text-faint); background: none; border: none;
+  cursor: pointer; align-self: flex-start;
+  margin-left: var(--sp5); margin-top: var(--sp1);
+  transition: color var(--t-base);
+}
+.st-add-step:hover { color: var(--accent); }
+.add-st-btn {
+  font-size: 11px; letter-spacing: .16em; text-transform: uppercase;
+  color: var(--text-faint); background: none; border: none;
+  cursor: pointer; align-self: flex-start;
+  transition: color var(--t-base);
+  margin-top: var(--sp2);
+}
+.add-st-btn:hover { color: var(--accent); }
 
-/* ---- Slot cards ------------------------------------------------------ */
-.slot-card {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-md);
-  padding: var(--space-md);
-  background: var(--color-bg-card);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius-md);
-  margin-bottom: var(--space-sm);
-  transition: border-color var(--transition-fast);
-}
-.slot-card:hover     { border-color: var(--color-border-strong); }
-.slot-card-title     { font-size: var(--text-sm); font-weight: var(--font-weight-medium); color: var(--color-text); }
-.slot-card-time      { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 4px; }
+/* ── Goals ── */
+.goal-item    { display: flex; justify-content: space-between; align-items: flex-start; gap: var(--sp3); padding: var(--sp3) 0; border-bottom: 1px solid rgba(245,247,251,.05); }
+.goal-info    { flex: 1; min-width: 0; }
+.goal-title   { font-size: 13px; margin-bottom: 2px; }
+.goal-desc    { font-size: 11px; color: var(--text-muted); }
+.goal-actions { display: flex; gap: var(--sp2); align-items: center; flex-shrink: 0; }
+.goal-add-form { display: flex; flex-direction: column; gap: var(--sp3); }
 
-/* ---- Schedule blocks ------------------------------------------------- */
-.schedule-block {
-  padding: var(--space-sm) var(--space-md);
-  background: var(--color-bg-elevated);
-  border-left: 3px solid var(--color-accent-cyan);
-  border-radius: 0 var(--radius-sm) var(--radius-sm) 0;
-  margin-bottom: var(--space-xs);
+/* ── Slot list ── */
+.slot-item  { display: flex; justify-content: space-between; align-items: center; padding: var(--sp2) 0; border-bottom: 1px solid rgba(245,247,251,.05); font-size: 12px; }
+.slot-info  { color: var(--text-muted); }
+
+/* ── Schedule ── */
+.sched-block {
+  display: flex; align-items: center; gap: var(--sp4);
+  padding: var(--sp3) var(--sp4);
+  background: rgba(255,255,255,.025);
+  clip-path: var(--clip);
+  margin-bottom: var(--sp2);
+  transition: background var(--t-base);
 }
-.schedule-block.break {
-  border-left-color: var(--color-border);
-  opacity: 0.6;
-}
-.schedule-block-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-sm);
-  margin-bottom: 4px;
-}
-.schedule-block-title { font-size: var(--text-sm); font-weight: var(--font-weight-medium); color: var(--color-text); }
-.schedule-block-time  { font-size: var(--text-xs); color: var(--color-text-muted); }
+.sched-block:hover { background: rgba(255,255,255,.05); }
+.sched-time   { font-size: 11px; color: var(--text-muted); letter-spacing: .1em; white-space: nowrap; }
+.sched-title  { flex: 1; font-size: 13px; }
+.sched-dur    { font-size: 11px; color: var(--text-muted); }
+.sched-actions-row { display: flex; gap: var(--sp3); padding-top: var(--sp3); }

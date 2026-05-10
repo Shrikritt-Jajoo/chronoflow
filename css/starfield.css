@@ -1,31 +1,7 @@
-/* =========================================================
-   ChronoFlow Page Background Canvas
-   ========================================================= */
-.page-bg {
+/* starfield canvas sits behind everything */
+#starCanvas {
   position: fixed;
   inset: 0;
   z-index: 0;
-  background: var(--color-bg);
-  overflow: hidden;
-  pointer-events: none;
-}
-.page-bg-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-.home-bg {
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  background: var(--color-bg);
-  overflow: hidden;
-  pointer-events: none;
-}
-.home-bg-canvas {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  display: block;
 }

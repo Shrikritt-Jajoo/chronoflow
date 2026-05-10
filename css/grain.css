@@ -1,29 +1,44 @@
-/* =========================================================
-   ChronoFlow Film Grain Overlay
-   ========================================================= */
-.grain {
+.grain, .grain2 {
   position: fixed;
-  inset: -50%;
-  width: 200%;
-  height: 200%;
+  inset: -18%;
   pointer-events: none;
   z-index: 1;
-  opacity: 0.032;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)'/%3E%3C/svg%3E");
-  background-size: 256px 256px;
-  mix-blend-mode: overlay;
-  animation: grainShift 0.12s steps(1) infinite;
 }
-@keyframes grainShift {
-  0%   { transform: translate(0,0); }
-  10%  { transform: translate(-2%,-3%); }
-  20%  { transform: translate(3%,1%); }
-  30%  { transform: translate(-1%,4%); }
-  40%  { transform: translate(2%,-2%); }
-  50%  { transform: translate(-3%,2%); }
-  60%  { transform: translate(1%,-4%); }
-  70%  { transform: translate(-2%,3%); }
-  80%  { transform: translate(3%,0%); }
-  90%  { transform: translate(-1%,-1%); }
-  100% { transform: translate(0,0); }
+.grain {
+  opacity: var(--grain-opacity-1, .47);
+  mix-blend-mode: screen;
+  background:
+    repeating-linear-gradient(0deg,   rgba(255,255,255,.014) 0 1px, transparent 1px 3px),
+    repeating-linear-gradient(90deg,  rgba(255,255,255,.011) 0 1px, transparent 1px 4px),
+    radial-gradient(circle at 17% 23%, rgba(255,255,255,.12)  0 .55px, transparent .98px),
+    radial-gradient(circle at 71% 37%, rgba(255,255,255,.11)  0 .58px, transparent .95px),
+    radial-gradient(circle at 49% 79%, rgba(255,255,255,.10)  0 .45px, transparent .82px),
+    radial-gradient(circle at 33% 61%, rgba(255,255,255,.09)  0 .42px, transparent .78px);
+  background-size: auto, auto, 210px 210px, 290px 290px, 350px 350px, 460px 460px;
+  animation: grain1 .36s steps(6) infinite;
+}
+.grain2 {
+  opacity: var(--grain-opacity-2, .30);
+  mix-blend-mode: overlay;
+  background:
+    radial-gradient(circle at 55% 28%, rgba(255,255,255,.08) 0 .5px,  transparent .86px),
+    radial-gradient(circle at 22% 74%, rgba(255,255,255,.07) 0 .44px, transparent .80px);
+  background-size: 320px 320px, 410px 410px;
+  animation: grain2 .52s steps(5) infinite;
+}
+@keyframes grain1 {
+  0%   { transform: translate(0,0) }
+  17%  { transform: translate(-.8%,.7%) }
+  33%  { transform: translate(.6%,-.5%) }
+  50%  { transform: translate(-.4%,.8%) }
+  67%  { transform: translate(.7%,-.3%) }
+  83%  { transform: translate(-.5%,.4%) }
+  100% { transform: translate(0,0) }
+}
+@keyframes grain2 {
+  0%   { transform: translate(0,0) }
+  25%  { transform: translate(.9%,-.6%) }
+  50%  { transform: translate(-.7%,.8%) }
+  75%  { transform: translate(.5%,-.4%) }
+  100% { transform: translate(0,0) }
 }
